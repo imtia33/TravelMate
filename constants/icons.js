@@ -1,0 +1,11 @@
+import cng from "../assets/images/cng.png"
+import tempu from "../assets/images/tempu.png"
+import rikshaw from "../assets/images/rikshaw.png"
+import bus from "../assets/images/bus.png"
+import asi from "../assets/images/bus.png"
+import walk from "../assets/images/walk.png"
+import mahindra from "../assets/images/mahindra.png"
+import eye from "../assets/icons/eye.png"
+import truck from "../assets/icons/truck.png"
+import eyeHide from "../assets/icons/eye-hide.png"
+export default {walk,cng,tempu,rikshaw,bus,eye,eyeHide,mahindra,truck};

@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "TravelMate",
+    "slug": "travelmate",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "scheme": [
+      "travelmate"
+    ],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.travelmate.axi"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.travelmate.axi",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDRgXtqI3r5pKMcQx--3GzVMtgFvxIK_po"
+        }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "travelmate-axi.web.app",
+              "pathPrefix": "/verifying"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "newArchEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "3d312259-9771-4c7f-a922-876d0a68bd83"
+      }
+    },
+    "owner": "imtiaz.asi"
+  }
+}
