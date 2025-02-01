@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useGlobalContext } from "../../context/GlobalProvider"
 import { signOut } from '../../lib/appwrite'
+import { router } from 'expo-router'
 
 const { width } = Dimensions.get('window')
 
@@ -18,7 +19,10 @@ const Profile = () => {
     { icon: 'shield-outline', label: 'Privacy' },
     { icon: 'notifications-outline', label: 'Notifications' },
   ]
-
+ const logout = async () => {
+  await signOut();
+  router.replace("/sign-in");
+ }
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -76,7 +80,7 @@ const Profile = () => {
 
         <TouchableOpacity 
           style={styles.logoutButton}
-          onPress={signOut}
+          onPress={logout}
         >
           <Ionicons name="log-out-outline" size={24} color="#fff" />
           <Text style={styles.logoutText}>Logout</Text>

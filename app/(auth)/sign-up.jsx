@@ -26,6 +26,8 @@ const SignUp = () => {
     location: "",
     bloodtype: "",
     retypepassword: "",
+    Lat: null,
+    Long: null
   });
 
   const getLocations = async () => {
@@ -45,7 +47,7 @@ const SignUp = () => {
 
     setSubmitting(true);
     try {
-      const result = await createUser(form.email, form.password, form.username, form.location);
+      const result = await createUser(form.email, form.password, form.username, form.location, form.Lat, form.Long);
       setUser(result);
       setIsLogged(true);
       router.replace("/home");
@@ -88,7 +90,7 @@ const SignUp = () => {
             <CustomDropdown
               data={locationData}
               value={form.location}
-              onChange={(value) => setForm({ ...form, location: value })}
+              onChange={(value, Lat, Long) => setForm({ ...form, location: value, Lat, Long })}
               placeholder="Select location"
             />
           </View>

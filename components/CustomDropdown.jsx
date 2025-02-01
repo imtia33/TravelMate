@@ -23,6 +23,8 @@ const Icon = ({ name }) => {
 const DropdownItem = {
   label: '',
   value: '',
+  Lat: null,
+  Long: null,
 };
 
 const CustomDropdownProps = {
@@ -89,7 +91,7 @@ const EnhancedCustomDropdown = ({
           isSelected && selectedItemStyle,
         ]}
         onPress={() => {
-          onChange(item.value);
+          onChange(item.value, item.Lat, item.Long);
           toggleDropdown();
         }}
       >

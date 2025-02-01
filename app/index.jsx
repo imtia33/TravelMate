@@ -1,33 +1,53 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator,Dimensions,ImageBackground,Image,TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Dimensions, ImageBackground, Image, TouchableOpacity } from 'react-native';
 import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
-import { GetRoutes, GetLocations, GetFares } from '../lib/db';
+import { GetRoutes, GetLocations, GetFares, GetLocations2 } from '../lib/db';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {images,icons} from "../constants"
+import { images, icons } from "../constants"
 const { width, height } = Dimensions.get('window');
 import { router } from "expo-router";
 import { useGlobalContext } from "../context/GlobalProvider";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from "expo-status-bar";
 
-function Main() {
+export default function Main() {
   const db = useSQLiteContext();
-  const {loading, isLogged } = useGlobalContext();
+  const { loading, isLogged } = useGlobalContext();
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
- 
+  const [isDbInitialized, setIsDbInitialized] = useState(false);
+
   useEffect(() => {
     const initializeData = async () => {
+      try {
+        // // Ensure the database connection is valid
+        // if (!db) {
+        //   console.error('Database connection is not available');
+        //   return;
+        // }
+  
+        // // Initialize the database if needed
+        // if (!isDbInitialized) {
+        //   await migrateDbIfNeeded(db);
+        //   setIsDbInitialized(true);
+        // }
+  
+        // Insert data
         await insertRoutes();
         await insertLocations();
         await insertFares();
+  
         setMessage('Data initialization complete');
         console.log(message);
         setIsLoading(false);
+      } catch (error) {
+        console.error('Error during initialization:', error);
+        setIsLoading(false);
+      }
     };
-
+  
     initializeData();
-  }, []);
+  }, [db]); // Ensure db is a dependency
 
   async function getOffset(key) {
     try {
@@ -87,6 +107,7 @@ function Main() {
   const insertLocations = async () => {
     try {
       let offset = await getOffset("location_offset");
+      let offset2 = await getOffset("location_offset2"); // New offset for location_offset2
       if (offset === 0) {
         await updateOffset("location_offset", 0);
         offset = await getOffset("location_offset");
@@ -98,13 +119,28 @@ function Main() {
         if (result.length === 0) break;
         for (const location of result) {
           await db.runAsync(
-            'INSERT INTO locations (Name, Coordinates,single) VALUES (?, ?,?);',
-            [location.Name, location.Location,location.single]
+            'INSERT INTO locations (Name, Coordinates,single,OSM) VALUES (?, ?,?,?);',
+            [location.Name, location.Location, location.single, location.OSM]
           );
         }
         offset += result.length;
         await updateOffset("location_offset", result.length);
         if (result.length < 45) break;
+      }
+
+      while (true) {
+        const result2 = await GetLocations2(offset2);
+        console.log(`insertLocations - offset2: ${offset2}, result length: ${result2.length}`);
+        if (result2.length === 0) break;
+        for (const location of result2) {
+          await db.runAsync(
+            'INSERT INTO locations (Name, Coordinates,Coordinates2,single,OSM) VALUES (?,?,?,?,?);',
+            [location.Name, location.Location, location.Location1, location.single, location.OSM]
+          );
+        }
+        offset2 += result2.length;
+        await updateOffset("location_offset2", result2.length);
+        if (result2.length < 45) break;
       }
     } catch (error) {
       console.error(`insertLocations - error: ${error}`);
@@ -137,6 +173,7 @@ function Main() {
       console.error(`insertFares - error: ${error}`);
     }
   };
+
   useEffect(() => {
     if (!loading && isLogged) {
       router.replace("/home");
@@ -144,18 +181,17 @@ function Main() {
   }, [loading, isLogged]);
 
   return (
-    <SafeAreaView style={{ height: "100%",backgroundColor: '#d1d9ed' }}>
+    <SafeAreaView style={{ height: "100%", backgroundColor: '#d1d9ed' }}>
       <ImageBackground
         source={images.travel2}
         style={{ width: '100%', height: height * 0.718 }}
         resizeMode='contain'
       >
         <View style={{ backgroundColor: 'rgba(0, 0, 0, 0.2)' }} />
-       
       </ImageBackground>
       <View style={{ alignItems: 'center', padding: 20 }}>
         <Text style={{ fontSize: 40, marginBottom: 0, fontFamily: 'Ephesis-Regular', color: '#333', textAlign: 'center' }}>
-          {`Travel With Us `}
+          Travel With Us
         </Text>
         <TouchableOpacity
           disabled={isLoading}
@@ -187,61 +223,5 @@ function Main() {
       </View>
       <StatusBar backgroundColor="" style="dark" />
     </SafeAreaView>
-  );
-}
-
-async function migrateDbIfNeeded(db) {
-  const DATABASE_VERSION = 1;
-  let { user_version: currentDbVersion } = await db.getFirstAsync('PRAGMA user_version');
-  console.log(`migrateDbIfNeeded - currentDbVersion: ${currentDbVersion}`);
-  if (currentDbVersion >= DATABASE_VERSION) {
-    return;
-  }
-  if (currentDbVersion === 0) {
-    await db.execAsync(`
-      PRAGMA journal_mode = 'wal';
-      CREATE TABLE IF NOT EXISTS routes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        "From" TEXT NOT NULL,
-        "To" TEXT NOT NULL,
-        Vehicles TEXT,
-        distanceKm REAL,
-        District TEXT
-      );
-    `);
-    currentDbVersion = 1;
-  }
-  if (currentDbVersion === 1) {
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS locations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        "Name" TEXT NOT NULL ,
-        "Coordinates" TEXT NOT NULL,
-        "single" BOOLEAN
-      );
-    `);
-    currentDbVersion = 2;
-  }
-  if (currentDbVersion === 2) {
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS Fare (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        Vehicle TEXT NOT NULL,
-        farePKM REAL,
-        fareMin REAL,
-        fareFixed REAL
-      );
-    `);    
-    currentDbVersion = 3;
-  }
-  await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
-  console.log(`migrateDbIfNeeded - newDbVersion: ${DATABASE_VERSION}`);
-}
-
-export default function App() {
-  return (
-    <SQLiteProvider databaseName="routes.db" onInit={migrateDbIfNeeded}>
-      <Main />
-    </SQLiteProvider>
   );
 }

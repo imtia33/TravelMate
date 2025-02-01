@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { icons } from '../constants';
 import { Ionicons, FontAwesome, MaterialIcons, MaterialCommunityIcons, FontAwesome6 } from '@expo/vector-icons';
 
-const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) => {
+const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked, distance1 }) => {
 
   const [selectedSubRouteIndex, setSelectedSubRouteIndex] = useState(0);
 
@@ -15,7 +15,7 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) =>
         paddingBottom: 50
       }}>
         {clicked && (
-          <Text style={{fontSize: 16, color: '#000', textAlign: 'center'}}>No routes available.</Text>
+          <Text style={{ fontSize: 16, color: '#000', textAlign: 'center' }}>No routes available.</Text>
         )}
       </View>
     );
@@ -52,31 +52,33 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) =>
         .map(vehicle => route.vehicles.find(v => v.vehicle === vehicle));
       return { ...route, vehicles: uniqueVehicles };
     });
+    const uniqueFromToValues = Array.from(new Set(subRoutes.flatMap(route => [route.From, route.To])));
 
     return (
-      <View style={{marginBottom: 75}}>
+      <View style={{ marginBottom: 75 }}>
         {/* Route Summary Section */}
         <View style={{
           backgroundColor: '#fff',
-          padding: 15,
+          paddingHorizontal: 45,
           borderRadius: 10,
-          marginBottom: 15
+          marginBottom: 15,
+          paddingVertical: 15,
+          width: '80%',
+          alignSelf: 'center'
         }}>
           <View style={{
             flexDirection: 'row',
-            justifyContent: 'space-between'
+            justifyContent: 'space-between',
+            width: '80%',
+            alignSelf: 'center'
           }}>
-            <View style={{alignItems: 'center'}}>
+            <View style={{ alignItems: 'center' }}>
               <MaterialCommunityIcons name="speedometer" size={24} color="black" />
-              <Text style={{fontSize: 14, color: '#000', marginTop: 5}}>{routeSummary.totalDistance.toFixed(1)} km</Text>
+              <Text style={{ fontSize: 14, color: '#000', marginTop: 5 }}>{distance1[selectedRouteIndex].toFixed(2)} km</Text>
             </View>
-            <View style={{alignItems: 'center'}}>
-              <FontAwesome6 name="bangladeshi-taka-sign" size={24} color="#0c6b5b" />
-              <Text style={{fontSize: 14, color: '#000', marginTop: 5}}>{routeSummary.totalFare} BDT</Text>
-            </View>
-            <View style={{alignItems: 'center'}}>
+            <View style={{ alignItems: 'center' }}>
               <MaterialIcons name="location-pin" size={21} color="#F02E65" />
-              <Text style={{fontSize: 14, color: '#000', marginTop: 5}}>{routeSummary.totalStops} stops</Text>
+              <Text style={{ fontSize: 14, color: '#000', marginTop: 5 }}>{uniqueFromToValues.length} stops</Text>
             </View>
           </View>
         </View>
@@ -87,88 +89,90 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) =>
           padding: 15,
           borderRadius: 10
         }}>
-          <Text style={{
-            fontSize: 18,
-            fontWeight: 'bold',
-            marginBottom: 15,
-            color: '#333'
-          }}>Journey Steps</Text>
+          <View style={{ flexDirection: 'row', justifyContent: "space-between" }}>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: 'bold',
+              marginBottom: 15,
+              color: '#333'
+            }}>Journey Steps</Text>
+          </View>
           {uniqueGroupedSteps.map((route, index) => (
-            <View key={index} style={{marginBottom: 20}}>
+            <View key={index} style={{ marginBottom: 20 }}>
               {/* Origin Point */}
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 marginBottom: 10
               }}>
-                <FontAwesome 
-                  name={index === 0 ? "dot-circle-o" : "circle-o"} 
-                  size={16} 
-                  color={index === 0 ? "#1f9cbf" : "#000"} 
+                <FontAwesome
+                  name={index === 0 ? "dot-circle-o" : "circle-o"}
+                  size={16}
+                  color={index === 0 ? "#1f9cbf" : "#000"}
                 />
-                <Text style={{marginLeft: 10, fontSize: 14, color: '#333',fontFamily:'psemibold'}}>{route.From}</Text>
+                <Text style={{ marginLeft: 10, fontSize: 14, color: '#333', fontFamily: 'psemibold' }}>{route.From}</Text>
               </View>
 
               {/* Transport Details */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginLeft: 25}}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginLeft: 25 }}>
                 {route.vehicles.map((transportOption, optIndex) => (
-                  transportOption.vehicle !== "Walk" ? 
-                  <View key={optIndex} style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: '#f8f8f8',
-                    padding: 10,
-                    borderRadius: 8,
-                    marginRight: 10
-                  }}>
-                    <View style={{
-                      backgroundColor: '#e6f2ff',
+                  transportOption.vehicle !== "Walk" ?
+                    <View key={optIndex} style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#f8f8f8',
+                      padding: 10,
                       borderRadius: 8,
-                      padding: 8
+                      marginRight: 10
                     }}>
-                      <Image 
-                        source={icons[getVehicleIcon(transportOption.vehicle)]}
-                        style={{width: 40, height: 40}}
-                        resizeMode="contain"
-                      />
-                    </View>
-                    <View style={{marginLeft: 10, flex: 1}}>
-                      <Text style={{fontSize: 14, color: '#333',fontFamily:"psemibold"}}>{transportOption.vehicle}</Text>
                       <View style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        marginTop: 5
+                        backgroundColor: '#e6f2ff',
+                        borderRadius: 8,
+                        padding: 8
                       }}>
-                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                          <FontAwesome6 name="bangladeshi-taka-sign" size={14} style={{bottom:2}} color="#0c6b5b" />
-                          <Text style={{fontSize: 14, color: '#000', marginLeft: 4,fontFamily:'psemibold'}}>
-                            {transportOption.fare} BDT 
-                          </Text>
-                        </View>
-                        <Text style={{fontSize:20,color:'#F02E65'}}> • </Text>
-                        
-                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                          <MaterialCommunityIcons name="speedometer" size={22} color="black" />
-                          <Text style={{fontSize: 14, color: '#000', marginLeft: 4,fontFamily:'psemibold'}}>
-                            {transportOption.distance?.toFixed(1)} km
-                          </Text>
+                        <Image
+                          source={icons[getVehicleIcon(transportOption.vehicle)]}
+                          style={{ width: 40, height: 40 }}
+                          resizeMode="contain"
+                        />
+                      </View>
+                      <View style={{ marginLeft: 10, flex: 1 }}>
+                        <Text style={{ fontSize: 14, color: '#333', fontFamily: "psemibold" }}>{transportOption.vehicle}</Text>
+                        <View style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          marginTop: 5
+                        }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <FontAwesome6 name="bangladeshi-taka-sign" size={14} style={{ bottom: 2 }} color="#0c6b5b" />
+                            <Text style={{ fontSize: 14, color: '#000', marginLeft: 4, fontFamily: 'psemibold' }}>
+                              {transportOption.fare} BDT
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 20, color: '#F02E65' }}> • </Text>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <MaterialCommunityIcons name="speedometer" size={22} color="black" />
+                            <Text style={{ fontSize: 14, color: '#000', marginLeft: 4, fontFamily: 'psemibold' }}>
+                              {transportOption.distance?.toFixed(1)} km
+                            </Text>
+                          </View>
                         </View>
                       </View>
+                    </View> :
+                    <View key={optIndex} style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#f8f8f8',
+                      padding: 10,
+                      borderRadius: 8,
+                      marginRight: 10,
+                      minWidth: 230,
+                      minHeight: 65
+                    }}>
+                      <Ionicons name="walk-outline" size={28} color="#F02E65" />
+                      <Text style={{ marginLeft: 10, color: '#000', fontSize: 14, fontFamily: 'psemibold' }}>Walk {route.distance?.toFixed(1)} km</Text>
                     </View>
-                  </View> : 
-                  <View key={optIndex} style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: '#f8f8f8',
-                    padding: 10,
-                    borderRadius: 8,
-                    marginRight: 10,
-                    minWidth:230,
-                    minHeight:65
-                  }}>
-                    <Ionicons name="walk-outline" size={28} color="#F02E65" />
-                    <Text style={{marginLeft: 10, color: '#000', fontSize: 14,fontFamily:'psemibold'}}>Walk {route.distance?.toFixed(1)} km</Text>
-                  </View>
                 ))}
               </ScrollView>
 
@@ -180,8 +184,8 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) =>
                   marginBottom: 10,
                   marginTop: 10,
                 }}>
-                  <MaterialIcons name="location-on" size={18} style={{right:2}} color="#F02E65" />
-                  <Text style={{marginLeft: 10, fontSize: 14, color: '#333',fontFamily:'psemibold'}}>{route.To}</Text>
+                  <MaterialIcons name="location-on" size={18} style={{ right: 2 }} color="#F02E65" />
+                  <Text style={{ marginLeft: 10, fontSize: 14, color: '#333', fontFamily: 'psemibold' }}>{route.To}</Text>
                 </View>
               )}
 
@@ -236,11 +240,11 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) =>
     <View style={{
       flex: 1,
       backgroundColor: '#c1d3fe',
-      marginBottom:100
+      marginBottom: 100
     }}>
       {/* Main Route Selection */}
       {routes.length > 1 && (
-        <View style={{padding: 10,alignItems: 'center',}}>
+        <View style={{ padding: 10, alignItems: 'center', }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {routes.map((routeGroup, index) => (
               <TouchableOpacity
@@ -257,15 +261,15 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) =>
                   elevation: 2,
                   width: 60,
                   alignItems: 'center',
-                  
-                }, selectedRouteIndex === index && {backgroundColor: '#007AFF'}]}
+
+                }, selectedRouteIndex === index && { backgroundColor: '#007AFF' }]}
                 onPress={() => onRouteSelect(index)}
               >
                 <Text style={[{
                   fontSize: 14,
                   fontWeight: 'bold',
                   color: '#333'
-                }, selectedRouteIndex === index && {color: '#fff'}]}>
+                }, selectedRouteIndex === index && { color: '#fff' }]}>
                   {index + 1}
                 </Text>
               </TouchableOpacity>
@@ -276,7 +280,7 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) =>
 
       {/* Sub-Route Selection */}
       {routes[selectedRouteIndex]?.length > 1 && (
-        <View style={{padding: 10,alignItems: 'center',}}>
+        <View style={{ padding: 10, alignItems: 'center', }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {routes[selectedRouteIndex].map((subRoute, index) => (
               <TouchableOpacity
@@ -293,14 +297,14 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) =>
                   elevation: 2,
                   minWidth: 40,
                   alignItems: 'center'
-                }, selectedSubRouteIndex === index && {backgroundColor: '#4CAF50'}]}
+                }, selectedSubRouteIndex === index && { backgroundColor: '#4CAF50' }]}
                 onPress={() => setSelectedSubRouteIndex(index)}
               >
                 <Text style={[{
                   fontSize: 14,
                   fontWeight: 'bold',
                   color: '#333'
-                }, selectedSubRouteIndex === index && {color: '#fff'}]}>
+                }, selectedSubRouteIndex === index && { color: '#fff' }]}>
                   {index + 1}
                 </Text>
               </TouchableOpacity>
@@ -309,7 +313,7 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked }) =>
         </View>
       )}
 
-      <ScrollView style={{padding: 10}}>
+      <ScrollView style={{ padding: 10 }}>
         {renderRoutes(routes[selectedRouteIndex][selectedSubRouteIndex] || routes[selectedRouteIndex][0])}
       </ScrollView>
     </View>

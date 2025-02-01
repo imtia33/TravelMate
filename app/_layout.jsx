@@ -2,6 +2,7 @@ import { useFonts } from "expo-font";
 import { useEffect } from "react";
 import { SplashScreen, Stack,router } from "expo-router";
 import GlobalProvider from "../context/GlobalProvider";
+import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 SplashScreen.preventAutoHideAsync();
 const RootLayout = () => {
   const [fontsLoaded, error] = useFonts({
@@ -37,6 +38,11 @@ const RootLayout = () => {
 
 
   return (
+    <SQLiteProvider
+      databaseName="routes.db"
+      onInit={createDbIfNeeded}
+      onError={(error) => console.error('Database error:', error)}
+    >
     <GlobalProvider>
       <Stack >
         <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -45,7 +51,42 @@ const RootLayout = () => {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       </Stack>
     </GlobalProvider>
+    </SQLiteProvider>
   );
+};
+const createDbIfNeeded = async (db) => {
+  console.log("Creating database");
+  try {
+    await db.execAsync(
+      `PRAGMA journal_mode = 'wal';
+      CREATE TABLE IF NOT EXISTS routes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        "From" TEXT NOT NULL,
+        "To" TEXT NOT NULL,
+        Vehicles TEXT,
+        distanceKm REAL,
+        District TEXT
+      );
+      CREATE TABLE IF NOT EXISTS locations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        "Name" TEXT NOT NULL,
+        "Coordinates" TEXT,
+        "Coordinates2" TEXT,
+        "single" BOOLEAN,
+        "OSM" BOOLEAN
+      );
+      CREATE TABLE IF NOT EXISTS Fare (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        Vehicle TEXT NOT NULL,
+        farePKM REAL,
+        fareMin REAL,
+        fareFixed REAL
+      );`
+    );
+    console.log("Database created");
+  } catch (error) {
+    console.error("Error creating database:", error);
+  }
 };
 
 export default RootLayout;

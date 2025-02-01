@@ -1,19 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Dimensions,StyleSheet,ScrollView ,Modal, FlatList, Animated, Easing} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Dimensions,StyleSheet,ScrollView ,Modal, FlatList, Animated, Easing,BackHandler} from 'react-native';
 import MapView, { PROVIDER_DEFAULT, Polyline, Marker } from 'react-native-maps';
 import { Ionicons, Entypo,FontAwesome,MaterialIcons } from '@expo/vector-icons';
-import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
-import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
+import {  useSQLiteContext } from 'expo-sqlite';
 import RouteDisplay from '../../components/RouteDisplay';
+import { useGlobalContext } from "../../context/GlobalProvider";
 import * as Location from 'expo-location';
 const { width, height } = Dimensions.get('window');
-export default function App() {
-  return (
-    <SQLiteProvider databaseName="routes.db" onInit={migrateDbIfNeeded}>
-      <Main />
-    </SQLiteProvider>
-  );
-}
+
 const customMapStyle = [
   {
     "featureType": "water",
@@ -23,45 +17,72 @@ const customMapStyle = [
     ]
   }
 ];
-function Main() {
-  const db = useSQLiteContext();
-  const [routeData, setRouteData] = useState([]);
-  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
-  const [to, setto] = useState("")
-  const [from, setfrom] = useState("")
-  const [polylines, setPolylines] = useState([]); // Changed to state
+export default function Main() {
+  const {user} = useGlobalContext();  //user is the user object from the global context
+  const db = useSQLiteContext(); //db is the database object from the sqlite context
+  const [routeData, setRouteData] = useState([]); //routeData is the data of the route
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0); //selectedRouteIndex is the index of the selected route
+  const [to, setto] = useState("") //to is the destination
+  const [from, setfrom] = useState("") //from is the source
+  const [polylines, setPolylines] = useState([]); //polylines is the array of polylines
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [mapType, setMapType] = useState('standard');
-  const [showPath, setShowPath] = useState(false);
-  const [location, setLocation] = useState(null);
-  const [heading, setHeading] = useState(null);
-  const [tracking, setTracking] = useState(false);
-  const [isMarkerVisible, setIsMarkerVisible] = useState(false);
-  const [centerCoordinates, setCenterCoordinates] = useState({ latitude: 22.3543296, longitude: 91.8388736 });
-  const [polyliner, setPolyliner] = useState([]);
-  const [isModalVisible, setisModalVisible] = useState(false);
-  const [clicked, setclicked] = useState(false)
-  const [resultsfrom, setResultsfrom] = useState([]);
-  const [resultsto, setResultsto] = useState([]);
-  const mapRef = useRef(null);
-  const onGestureEnd = (event) => {
-    if (event.nativeEvent.translationX > 100) {
-      // Swipe from left to right
-      toggleSidebar();
-    } else if (event.nativeEvent.translationX < -100) {
-      // Swipe from right to left
-      toggleSidebar();
+  const [mapType, setMapType] = useState('standard'); //mapType is the type of the map
+  const [showPath, setShowPath] = useState(false); //showPath is the boolean value to show the path
+  const [location, setLocation] = useState(null); //location is the current location of the user
+  const [heading, setHeading] = useState(null); //heading is the heading of the user
+  const [searchtext, setsearchtext] = useState() //searchtext is the text of the search
+  const [showsearchmarker, setshowsearchmarker] = useState(false) //showsearchmarker is the boolean value to show the search marker
+  const [showsearchlocation, setshowsearchlocation] = useState([]) //showsearchlocation is the array of the search location
+  const [isMarkerVisible, setIsMarkerVisible] = useState(false); //isMarkerVisible is the boolean value to show the marker
+  const [showmainsearch, setshowmainsearch] = useState(false) //showmainsearch is the boolean value to show the main search
+  const [polyliner, setPolyliner] = useState([]); //polyliner is the array of the polylines
+  const [isModalVisible, setisModalVisible] = useState(false); //isModalVisible is the boolean value to show the modal
+  const [clicked, setclicked] = useState(false) //clicked is the boolean value to show the clicked
+  const [resultsfrom, setResultsfrom] = useState([]); //resultsfrom is the array of the results from
+  const [resultsto, setResultsto] = useState([]); //resultsto is the array of the results to
+  const [roaddistance, setroaddistance] = useState([]); //roaddistance is the array of the road distance
+  const [currentdistance, setcurrentdistance] = useState(null); //currentdistance is the current distance
+  const [extrapoly, setExtrapoly] = useState([]); //extrapoly is the array of the extrapoly
+  const [track, settrack] = useState(false); //track is the boolean value to show the track
+  const mapRef = useRef(null); //mapRef is the reference of the map
+  const sidebarAnimation = React.useRef(new Animated.Value(-width)).current; //sidebarAnimation is the animation of the sidebar
+  const bottomSheetAnimation = new Animated.Value(height); //bottomSheetAnimation is the animation of the bottom sheet
+
+
+
+
+
+
+
+
+
+
+  //make polyline smoother
+  const smoothPolyline = (points, iterations = 2) => {
+    for (let i = 0; i < iterations; i++) {
+      let newPoints = [];
+      for (let j = 0; j < points.length - 1; j++) {
+        let p1 = points[j];
+        let p2 = points[j + 1];
+  
+        let q = [(0.75 * p1[0] + 0.25 * p2[0]), (0.75 * p1[1] + 0.25 * p2[1])];
+        let r = [(0.25 * p1[0] + 0.75 * p2[0]), (0.25 * p1[1] + 0.75 * p2[1])];
+  
+        newPoints.push(q, r);
+      }
+      points = newPoints;
     }
+    return points;
   };
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: sidebarAnimation } }],
-    { useNativeDriver: true }
-  );
+
+  //log center coordinates
   const logCenterCoordinates = async () => {
     if (mapRef.current) {
       const region = await mapRef.current.getCamera();
     }
   };
+
+  //locate current position
   const locateCurrentPosition = async () => {
     track ? settrack(false) : settrack(true);
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -74,7 +95,7 @@ function Main() {
     const locationSubscription = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.BestForNavigation,
-        timeInterval: 1,
+        timeInterval: 0.001,
         distanceInterval: 0.001,
       },
       (newLocation) => {
@@ -82,8 +103,8 @@ function Main() {
         mapRef.current?.animateToRegion({
           latitude: newLocation.coords.latitude,
           longitude: newLocation.coords.longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
+          latitudeDelta: 0.00001, 
+          longitudeDelta: 0.00435, 
         }, 500);
       }
     );
@@ -98,9 +119,8 @@ function Main() {
     };
   }
 
-  const sidebarAnimation = React.useRef(new Animated.Value(-width)).current;
-  const bottomSheetAnimation = new Animated.Value(height);
 
+ //sidebar style
   const sidebarStyle = {
     transform: [{ translateX: sidebarAnimation }],
   };
@@ -113,29 +133,145 @@ function Main() {
       easing: Easing.inOut(Easing.ease),
       useNativeDriver: true,
     }).start();
-    setIsSidebarOpen(!isSidebarOpen);
+    setIsSidebarOpen(prev => !prev);
   };
+  //selecting route 1,2,3....
   const handleRouteSelect = (index) => {
+    const selectedDistance = roaddistance[index];
+    setcurrentdistance(selectedDistance);
     setSelectedRouteIndex(index);
     if (polylines[index]) {
       setPolyliner(polylines[index]);
-    } 
+      setExtrapoly(polylines.filter((_, i) => i !== index));
+    }
   };
-  
+  //secondary search with from and to
   const handleSearchPress = async() => {
+    if(from === "" || to === "" && from===to){
+      return;
+    }
     await getBestRoute(from, to);
+    
     setclicked(true);
     setShowPath(true);
     setIsSidebarOpen(true);
     toggleSidebar();
     setisModalVisible(false);
   };
+  //find closest location
+  const findClosestLocation = async () => {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      console.error('Location permission not granted');
+      return null;
+    }
+    const currentLocation = await Location.getCurrentPositionAsync({});
+    const userPos = {
+      latitude: currentLocation.coords.latitude,
+      longitude: currentLocation.coords.longitude
+    };
+    const locations = await db.getAllAsync('SELECT * FROM locations WHERE single = true');
+    let closestLocation = null;
+    let minDistance = Infinity;
+
+    const toRadians = (degrees) => degrees * (Math.PI / 180);
+    const calculateDistance = (lat1, lon1, lat2, lon2) => {
+      const R = 6371e3; // Earth's radius in meters
+      const φ1 = toRadians(lat1);
+      const φ2 = toRadians(lat2);
+      const Δφ = toRadians(lat2 - lat1);
+      const Δλ = toRadians(lon2 - lon1);
+
+      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+      return R * c; // Distance in meters
+    };
+
+    for (const loc of locations) {
+      const locCoords = JSON.parse(loc.Coordinates)[0];
+      const distance = calculateDistance(
+        userPos.latitude,
+        userPos.longitude,
+        locCoords[0],
+        locCoords[1]
+      );
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestLocation = loc;
+      }
+    }
+
+    return closestLocation;
+  } catch (error) {
+    console.error('Error finding closest location:', error);
+    return null;
+  }
+  };
+  //secondary search with to and closest location using from value
+  const handleSearchPress2 = async () => {
+  if (to === "") {
+    return;
+  }
+  
+  const closestLocation = await findClosestLocation();
+  if (closestLocation) {
+    if(closestLocation.Name===to){
+                  setto(item.Name);
+                  setResultsto([]);
+                  setshowsearchmarker(true);
+                  setshowmainsearch(false);
+                  setclicked(false);  
+                  setShowPath(false);
+                  setRouteData([]);
+                  setPolylines([]);
+                  setPolyliner([]);
+                  setExtrapoly([]);
+                  setshowsearchlocation(JSON.parse(item.Coordinates)[0]);
+                  mapRef.current?.animateCamera({
+                    center: {
+                      latitude: showsearchlocation[0],
+                      longitude: showsearchlocation[1],
+                    },
+                    pitch: 0, // Tilt the camera for a more horizontal view
+                    heading: 0, // Keep the heading north
+                    zoom: 15, // Adjust zoom level as needed
+                    // altitude: 1000, // Adjust altitude for a 3D effect
+                  }, { duration: 500 });
+      return;
+    }
+    await getBestRoute(closestLocation.Name, to);
+    mapRef.current?.animateCamera({
+      center: {
+        latitude: showsearchlocation[0],
+        longitude: showsearchlocation[1],
+      },
+      pitch: 0, // Tilt the camera for a more horizontal view
+      heading: 0, // Keep the heading north
+      zoom: 15, // Adjust zoom level as needed
+      altitude: 1000, // Adjust altitude for a 3D effect
+    }, { duration: 500 });
+    setshowsearchmarker(false);
+    setclicked(true);
+    setShowPath(true);
+    setIsSidebarOpen(true);
+    toggleSidebar();
+    setisModalVisible(false);
+  } else {
+    console.error('No closest location found');
+  }
+ };
   const handleLayersPress = () => {
     setMapType(prevType => (prevType === 'standard' ? 'hybrid' : 'standard'));
   };
   const handleSearchViewOpen = async() => {
     setisModalVisible(true)
   };
+  
   const fetchSuggestionsfrom = async (input) => {
     if (input.trim() === '') {
       setResultsfrom([]);
@@ -216,10 +352,10 @@ function Main() {
     };
 
     const updateBestRoutes = (newRoute) => {
-        if (bestRoutes.length < 3) {
+        if (bestRoutes.length < 10) {
             bestRoutes.push(newRoute);
             bestRoutes.sort((a, b) => a.totalDistance - b.totalDistance);
-        } else if (newRoute.totalDistance < bestRoutes[bestRoutes.length - 1].totalDistance) {
+        } else if (newRoute.totalDistance < bestRoutes[bestRoutes.length - 1].totalDistance ) {
             bestRoutes.pop();
             bestRoutes.push(newRoute);
             bestRoutes.sort((a, b) => a.totalDistance - b.totalDistance);
@@ -227,7 +363,28 @@ function Main() {
     };
 
     await dfs(start, [], 0, new Set());
-    return bestRoutes;
+    const sortedBestRoutes = bestRoutes.sort((a, b) => a.totalDistance - b.totalDistance);
+
+    if (sortedBestRoutes.length < 3) {
+        return sortedBestRoutes;
+    }
+
+    const finalRoutes = [];
+    finalRoutes.push(sortedBestRoutes[0]); // Always include the shortest route
+
+    for (let i = 1; i < sortedBestRoutes.length; i++) {
+        const currentRoute = sortedBestRoutes[i];
+        const distanceDiff1 = currentRoute.totalDistance - finalRoutes[0].totalDistance;
+        const distanceDiff2 = (finalRoutes.length > 1) ? currentRoute.totalDistance - finalRoutes[1].totalDistance : Infinity;
+
+        if (distanceDiff1 >= 0.8 && finalRoutes.length < 3) {
+            finalRoutes.push(currentRoute);
+        } else if (distanceDiff2 >= 0.8 && finalRoutes.length < 3) {
+            finalRoutes.push(currentRoute);
+        }
+    }
+
+    return finalRoutes;
 };
 const fetchAndSeparatePaths = async (path) => {
   if (!Array.isArray(path) || path.length === 0) {
@@ -294,6 +451,7 @@ const merge = async (docs) => {
   }
   return mergedResults;
 };
+
 
 const combination = (separate, merged, From, To) => {
   if (!Array.isArray(merged) || merged.length === 0) {
@@ -443,6 +601,7 @@ const combination = (separate, merged, From, To) => {
   return sortedComb;
 };
 
+
 const getBestRoute = async (From, To) => {
   try {
     let bestRoute = await findTop3DistinctRoutes(From, To);
@@ -453,10 +612,10 @@ const getBestRoute = async (From, To) => {
         console.error("Invalid path in bestRoute document:", doc);
         continue;
       }
+      roaddistance.push(doc.totalDistance)
       let separate = await fetchAndSeparatePaths(doc.path);
       let merged = await merge(separate);
       let res = combination(separate, merged, From, To);
-      console.log(res);
       data.push(res);
       let polylineData = await polylinemaker(doc.path);
       newPolylines.push(polylineData);
@@ -464,6 +623,10 @@ const getBestRoute = async (From, To) => {
     setRouteData(data);
     setPolylines(newPolylines);
     setPolyliner(newPolylines[0]);
+    setExtrapoly(newPolylines.filter((_, i) => i !== 0));
+    const selectedDistance = roaddistance[0];
+    setcurrentdistance(selectedDistance);
+    
   } catch (error) {
     console.error("Error in getBestRoute:", error);
   }
@@ -500,50 +663,26 @@ const fare = async (distance, vehicle) => {
 const polylinemaker = async (path) => {
   const queries = [];
   for (let i = 0; i < path.length - 1; i++) {
-      queries.push(
-          db.getFirstAsync('SELECT * FROM locations WHERE "Name" = ?', path[i]),
-          db.getFirstAsync('SELECT * FROM locations WHERE "Name" = ?', path[i + 1]),
-          db.getFirstAsync('SELECT * FROM locations WHERE "Name" = ?', `${path[i]}-${path[i + 1]}`),
-          db.getFirstAsync('SELECT * FROM locations WHERE "Name" = ?', `${path[i + 1]}-${path[i]}`)
-      );
+    let res = await db.getFirstAsync('SELECT * FROM locations WHERE "Name" = ?', `${path[i]}-${path[i + 1]}`);
+         if(i<path.length - 1){
+          
+          if (res && res.Coordinates2) {
+            const coordinatesArray = JSON.parse(res.Coordinates2);
+            queries.push(...coordinatesArray);
+          }
+         }
+         else{
+          if (res && res.Coordinates) {
+           const coordinatesArray = JSON.parse(res.Coordinates);
+           queries.push(...coordinatesArray);
+          }
+         }
+         
   }
-
-  // Run all queries in parallel
-  const results = await Promise.all(queries);
-  const data = [];
-
-  for (let i = 0; i < results.length; i += 4) {
-      const start = results[i];
-      const end = results[i + 1];
-      const middle = results[i + 2];
-      const reverseMiddle = results[i + 3];
-
-      // Add start coordinates if they exist
-      if (start && start.Coordinates) {
-          const startCoordinates = JSON.parse(start.Coordinates);
-          data.push(startCoordinates[0]);
-      }
-
-      // Add middle coordinates (or reversed middle coordinates)
-      if (middle && middle.Coordinates) {
-          const middleCoordinates = JSON.parse(middle.Coordinates);
-          data.push(...middleCoordinates);
-      } else if (reverseMiddle && reverseMiddle.Coordinates) {
-          const reverseCoordinates = JSON.parse(reverseMiddle.Coordinates);
-          data.push(...reverseCoordinates.reverse());
-      }
-
-      // Add end coordinates if they exist
-      if (end && end.Coordinates) {
-          const endCoordinates = JSON.parse(end.Coordinates);
-          data.push(endCoordinates[0]);
-      }
-  }
-
-  return data;
+  //console.log(queries)
+  return queries;
 };
 
-const [track, settrack] = useState(false);
  return (
   <View style={{flex: 1, marginBottom: 0, backgroundColor: '#EDEDF0'}}>
     <MapView
@@ -552,59 +691,177 @@ const [track, settrack] = useState(false);
       style={{...StyleSheet.absoluteFillObject}}
       customMapStyle={customMapStyle} 
       mapType={mapType}
+      showsCompass={true}
       showsTraffic={true}
       initialRegion={{
-        latitude: 22.3543296,
-        longitude: 91.8388736,
+        latitude: user.Lat,
+        longitude: user.Long,
         latitudeDelta: 0.0922,
         longitudeDelta: 0.0421,
       }}
     >
-      {(showPath&&polyliner) && (
+      {
+        polylines.map((poly, index) => (
+          <React.Fragment key={index}>
+          <Polyline
+            coordinates={poly.map(([longitude, latitude]) => ({
+              latitude,
+              longitude,
+            }))}
+            strokeColor="#5f5f78"
+            strokeWidth={12}
+          />
+          <Polyline
+            coordinates={poly.map(([longitude, latitude]) => ({
+              latitude,
+              longitude,
+            }))}
+            strokeColor="#D9EAFD"
+            strokeWidth={8}
+            tappable={true}
+            onPress={() => {
+              setSelectedRouteIndex(index);
+              setPolyliner(poly);
+              const extraPolylines = polylines.filter((_, i) => i !== index).slice(0, 2); // Get up to 2 extra polylines
+              setExtrapoly(extraPolylines);
+            }}
+          />
+          </React.Fragment>
+        ))
+      }
+      {(showPath && polyliner) && (
+        <>
         <Polyline
-          coordinates={polyliner.map(([latitude, longitude]) => ({
+          coordinates={polyliner.map(([longitude, latitude]) => ({
             latitude,
-            longitude
+            longitude,
           }))}
-          strokeColor="rgba(0, 0, 255, 0.7)"
-          strokeWidth={8}
+          strokeColor="#030370"
+          strokeWidth={14}
+        />
+        <Polyline
+          coordinates={polyliner.map(([longitude, latitude]) => ({
+            latitude,
+            longitude,
+          }))}
+          strokeColor="#0000FF"
+          strokeWidth={10}
+          tappable={true}
+        /></>
+      )}
+      
+      {polyliner.length > 0 && (
+        <Marker
+          coordinate={{
+            latitude: polyliner[polyliner.length - 1][1],
+            longitude: polyliner[polyliner.length - 1][0],
+          }}
+          title={to}
         />
       )}
-      {location&& track && (
+      {showsearchlocation&&showsearchmarker && (
         <Marker
-        coordinate={{
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        }}
-        rotation={heading}
-        anchor={{ x: 0.5, y: 0.5 }}
-      >
-        <MaterialIcons name="navigation" size={30} color="red" />
-      </Marker>
+          coordinate={{
+            latitude: showsearchlocation[0],
+            longitude: showsearchlocation[1],
+          }}
+          title={to}
+        />
+      )}
+      
+      {location && track && (
+        <Marker
+          coordinate={{
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          }}
+          rotation={heading}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <MaterialIcons style={{left:11,top:2}} name="navigation" size={30} color="#FD366E" />
+        </Marker>
       )}
     </MapView>
-    {isMarkerVisible&&(<View style={{position: 'absolute', top: '50%', left: '50%', marginLeft: -16, marginTop: -28}}>
-      <Text style={{fontSize: 24, color: 'red'}}>📍</Text>
-    </View>)}
+    {isMarkerVisible && (
+      <View style={{position: 'absolute', top: '50%', left: '50%', marginLeft: -16, marginTop: -28}}>
+        <Text style={{fontSize: 24, color: 'red'}}>📍</Text>
+      </View>
+    )}
 
     <View style={{position: 'absolute', top: 40, left: 10, right: 10, height: 50, backgroundColor: '#c1d3fe', borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, elevation: 5}}>
       {clicked && (
-      <TouchableOpacity onPress={toggleSidebar} style={{padding: 5}}>
-        <Ionicons name="menu" size={24} color="black" />
-      </TouchableOpacity>
+        <TouchableOpacity onPress={toggleSidebar} style={{padding: 5}}>
+          <Ionicons name="menu" size={24} color="black" />
+        </TouchableOpacity>
       )}
       <TextInput
         style={{flex: 1, height: 40, marginLeft: 10, fontSize: 16}}
         placeholder="Search here"
         placeholderTextColor="#000"
+        value={to}
+        onChangeText={(text) => {
+          setshowmainsearch(true);
+          setto(text);
+          fetchSuggestionsTo(text);
+        }}
       />
-      <TouchableOpacity style={{padding: 5}}>
+      {resultsto.length > 0 && !(resultsto.length === 1 && from === resultsto[0].Name) && showmainsearch && (
+        <View style={{position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: 'white', borderRadius: 10, elevation: 5, width: 300}}>
+          <FlatList
+            data={resultsto}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                onPress={() => {
+                  setto(item.Name);
+                  setResultsto([]);
+                  setshowsearchmarker(true);
+                  setshowmainsearch(false);
+                  setclicked(false);  
+                  setShowPath(false);
+                  setRouteData([]);
+                  setPolylines([]);
+                  setPolyliner([]);
+                  setExtrapoly([]);
+                  setshowsearchlocation(JSON.parse(item.Coordinates)[0]);
+                  mapRef.current?.animateCamera({
+                    center: {
+                      latitude: showsearchlocation[0],
+                      longitude: showsearchlocation[1],
+                    },
+                    pitch: 0, // Tilt the camera for a more horizontal view
+                    heading: 0, // Keep the heading north
+                    zoom: 15, // Adjust zoom level as needed
+                    // altitude: 1000, // Adjust altitude for a 3D effect
+                  }, { duration: 500 });
+                }}
+                style={{paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ccc'}}
+              >
+                <Text style={{ fontSize: 16, color: '#212121' }}>{item.Name}</Text>
+              </TouchableOpacity>
+            )}
+            style={{ maxHeight: 150 }}
+            nestedScrollEnabled
+          />
+        </View>
+      )}
+      {useEffect(() => {
+        const backHandler = () => {
+          setshowmainsearch(false);
+          return true;
+        };
+
+        const backHandlerListener = BackHandler.addEventListener('hardwareBackPress', backHandler);
+
+        return () => backHandlerListener.remove();
+      }, [])}
+      <TouchableOpacity onPress={handleSearchPress2} style={{padding: 5}}>
         <Ionicons name="search" size={24} color="black" />
       </TouchableOpacity>
     </View>
     
-    <TouchableOpacity onPress={handleLayersPress} style={{position: 'absolute', top: 100, right: 10, backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5}}>
-      <Ionicons name="layers" size={24} color="black" />
+    <TouchableOpacity onPress={handleLayersPress} style={{position: 'absolute', bottom: 100, alignSelf:'start', backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5,left:10}}>
+      <Ionicons name="layers" size={24} color="#5DB996" />
     </TouchableOpacity>
     <View style={{position: 'absolute', top: 150, right: 10, flexDirection: 'column', alignItems: 'center'}}>
       {polylines.map((_, index) => ( 
@@ -625,177 +882,116 @@ const [track, settrack] = useState(false);
       style={{position: 'absolute', bottom: 150, right: 10, backgroundColor: '#5571b5', borderRadius: 20, padding: 10, elevation: 5}}>
       <MaterialIcons name="directions" size={24} color="white" />
     </TouchableOpacity>
-    <GestureHandlerRootView style={{ flex: 1 }}>
-        <PanGestureHandler onGestureEvent={onGestureEvent} onEnded={onGestureEnd}>
     <Animated.View style={[{position: 'absolute', top: 0, left: 0, width: '100%', height: '120%', backgroundColor: '#c1d3fe', elevation: 10}, sidebarStyle]}>
       <TouchableOpacity onPress={toggleSidebar} style={{position: 'absolute', top: 40, right: 10, zIndex: 1}}>
         <Ionicons name="close" size={24} color="black" />
       </TouchableOpacity>
       <View style={{flex: 1, paddingTop: 40, width: '100%', paddingHorizontal: 5, marginBottom:0}}>
-        {/* {clicked && (
-        <View style={{ flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginTop:10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 3 }}>
-            <Text style={{fontFamily:'psemibold', fontSize: 15}}>From:</Text>
-            <Text style={{fontFamily:'psemibold', fontSize: 15, marginLeft: 5}}>{from}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{fontFamily:'psemibold', fontSize: 15}}>To:</Text>
-            <Text style={{fontFamily:'psemibold', fontSize: 15, marginLeft: 5}}>{to}</Text>
-          </View>
-        </View>
-        )} */}
         {routeData.length > 0 && (
         <RouteDisplay 
           routes={routeData} 
           selectedRouteIndex={selectedRouteIndex}
           onRouteSelect={handleRouteSelect}
+          distance1={roaddistance}
         />)}
       </View>
     </Animated.View>
-    </PanGestureHandler>
-    </GestureHandlerRootView>
     {isModalVisible && (
-  <>
-    <View style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF'}}>
-      <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingHorizontal: 8, top:50}}>
-        <TouchableOpacity
-          style={{padding: 8, bottom:50,right:10}}
-          onPress={() => setisModalVisible(false)}
-        >
-          <Ionicons name="arrow-back" size={24} color="black" />
-        </TouchableOpacity>
-        <View style={{flexDirection:'column', justifyContent:'space-between', height:75,alignContent:'center'}}>
-          <FontAwesome style={{marginLeft:1}} name={from.length > 0 ? "dot-circle-o" : "circle-o"} size={17} color={from.length > 0 ? "#1f9cbf" : "black"} />
-          <Entypo style={{marginLeft:1}} name="dots-three-vertical" size={16} color="black"/>
-          <MaterialIcons style={{right:1,}} name="my-location" size={19} color="red" />
-        </View>
-        
-        <View style={{flex: 1, marginLeft: 3, marginRight: 5}}>
-          <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 8}}>
+      <>
+        <View style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF'}}>
+          <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingHorizontal: 8, top:50}}>
+            <TouchableOpacity
+              style={{padding: 8, bottom:50,right:10}}
+              onPress={() => setisModalVisible(false)}
+            >
+              <Ionicons name="arrow-back" size={24} color="black" />
+            </TouchableOpacity>
+            <View style={{flexDirection:'column', justifyContent:'space-between', height:75,alignContent:'center'}}>
+              <FontAwesome style={{marginLeft:1}} name={from.length > 0 ? "dot-circle-o" : "circle-o"} size={17} color={from.length > 0 ? "#1f9cbf" : "black"} />
+              <Entypo style={{marginLeft:1}} name="dots-three-vertical" size={16} color="black"/>
+              <MaterialIcons style={{right:1,}} name="my-location" size={19} color="red" />
+            </View>
             
-            <View style={{flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2}}>
-              <TextInput
-                style={{fontSize: 16, color: '#212121', paddingVertical: 8, paddingHorizontal: 16}}
-                placeholder="Your location"
-                placeholderTextColor="#5F6368"
-                value={from}
-                onChangeText={(text) => {
-                  setfrom(text);
-                  fetchSuggestionsfrom(text);
-                }}
-              />
-              {resultsfrom.length > 0 && !(resultsfrom.length === 1 && from === resultsfrom[0].Name) && (
-                <FlatList
-                  data={resultsfrom}
-                  keyExtractor={(item) => item.id.toString()}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity 
-                      onPress={() => {
-                        setfrom(item.Name);
-                        setResultsfrom([]);
-                      }}
-                      style={{paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ccc'}}
-                    >
-                      <Text style={{ fontSize: 16, color: '#212121' }}>{item.Name}</Text>
-                    </TouchableOpacity>
+            <View style={{flex: 1, marginLeft: 3, marginRight: 5}}>
+              <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 8}}>
+                <View style={{flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2}}>
+                  <TextInput
+                    style={{fontSize: 16, color: '#212121', paddingVertical: 8, paddingHorizontal: 16}}
+                    placeholder="Your location"
+                    placeholderTextColor="#5F6368"
+                    value={from}
+                    onChangeText={(text) => {
+                      setfrom(text);
+                      fetchSuggestionsfrom(text);
+                    }}
+                  />
+                  {resultsfrom.length > 0 && !(resultsfrom.length === 1 && from === resultsfrom[0].Name) && (
+                    <FlatList
+                      data={resultsfrom}
+                      keyExtractor={(item) => item.id.toString()}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity 
+                          onPress={() => {
+                            setfrom(item.Name);
+                            setResultsfrom([]);
+                          }}
+                          style={{paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ccc'}}
+                        >
+                          <Text style={{ fontSize: 16, color: '#212121' }}>{item.Name}</Text>
+                        </TouchableOpacity>
+                      )}
+                      style={{ maxHeight: 150 }}
+                      nestedScrollEnabled
+                    />
                   )}
-                  style={{ maxHeight: 150 }}
-                  nestedScrollEnabled
-                />
-              )}
-            </View>
-          </View>
+                </View>
+              </View>
 
-          <View style={{flexDirection: 'row', alignItems: 'center'}}>
-            <View style={{flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2}}>
-              <TextInput
-                style={{fontSize: 16, color: '#212121', paddingVertical: 8, paddingHorizontal: 16}}
-                placeholder="Choose destination"
-                placeholderTextColor="#5F6368"
-                value={to}
-                onChangeText={(text) => {
-                  setto(text);
-                  fetchSuggestionsTo(text);
-                }}
-              />
-              {resultsto.length > 0 && !(resultsto.length === 1 && from === resultsto[0].Name) && (
-                <FlatList
-                  data={resultsto}
-                  keyExtractor={(item) => item.id.toString()}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity 
-                      onPress={() => {
-                        setto(item.Name);
-                        setResultsto([]);
-                      }}
-                      style={{paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ccc'}}
-                    >
-                      <Text style={{ fontSize: 16, color: '#212121' }}>{item.Name}</Text>
-                    </TouchableOpacity>
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                <View style={{flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2}}>
+                  <TextInput
+                    style={{fontSize: 16, color: '#212121', paddingVertical: 8, paddingHorizontal: 16}}
+                    placeholder="Choose destination"
+                    placeholderTextColor="#5F6368"
+                    value={to}
+                    onChangeText={(text) => {
+                      setto(text);
+                      fetchSuggestionsTo(text);
+                    }}
+                  />
+                  {resultsto.length > 0 && !(resultsto.length === 1 && from === resultsto[0].Name) && (
+                    <FlatList
+                      data={resultsto}
+                      keyExtractor={(item) => item.id.toString()}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity 
+                          onPress={() => {
+                            setto(item.Name);
+                            setResultsto([]);
+                          }}
+                          style={{paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ccc'}}
+                        >
+                          <Text style={{ fontSize: 16, color: '#212121' }}>{item.Name}</Text>
+                        </TouchableOpacity>
+                      )}
+                      style={{ maxHeight: 150 }}
+                      nestedScrollEnabled
+                    />
                   )}
-                  style={{ maxHeight: 150 }}
-                  nestedScrollEnabled
-                />
-              )}
+                </View>
+              </View>
             </View>
+
+            <TouchableOpacity
+              style={{padding: 8, width: 46, height: 46, borderRadius:25, backgroundColor:'#4285F4', alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4}}
+              onPress={handleSearchPress}
+            >
+              <Ionicons name="search" size={24} color="white" />
+            </TouchableOpacity>
           </View>
         </View>
-
-        <TouchableOpacity
-          style={{padding: 8, width: 46, height: 46, borderRadius:25, backgroundColor:'#4285F4', alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4}}
-          onPress={handleSearchPress}
-        >
-          <Ionicons name="search" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  </>
-)}
+      </>
+    )}
   </View>
 );
-}
-
-async function migrateDbIfNeeded(db) {
-  const DATABASE_VERSION = 1;
-  let { user_version: currentDbVersion } = await db.getFirstAsync('PRAGMA user_version');
-  if (currentDbVersion >= DATABASE_VERSION) {
-    return;
-  }
-  if (currentDbVersion === 0) {
-    await db.execAsync(`
-      PRAGMA journal_mode = 'wal';
-      CREATE TABLE IF NOT EXISTS routes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        "From" TEXT NOT NULL,
-        "To" TEXT NOT NULL,
-        Vehicles TEXT,
-        distanceKm REAL,
-        District TEXT
-      );
-    `);
-    currentDbVersion = 1;
-  }
-  if (currentDbVersion === 1) {
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS locations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        "Name" TEXT NOT NULL UNIQUE,
-        "Coordinates" TEXT NOT NULL
-      );
-    `);
-    currentDbVersion = 2;
-  }
-  if (currentDbVersion === 2) {
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS Fare (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        Vehicle TEXT NOT NULL,
-        farePKM REAL,
-        fareMin REAL,
-        fareFixed REAL
-      );
-    `);    
-    currentDbVersion = 3;
-  }
-  await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }
