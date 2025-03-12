@@ -29,7 +29,7 @@
       "package": "com.travelmate.axi",
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyDRgXtqI3r5pKMcQx--3GzVMtgFvxIK_po"
+          "apiKey": "Google_Api_key"
         }
       },
       "intentFilters": [
