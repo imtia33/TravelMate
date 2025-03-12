@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image,Modal, Dimensions,StyleSheet } from 'react-native';
 import { icons } from '../constants';
 import { Ionicons, FontAwesome, MaterialIcons, MaterialCommunityIcons, FontAwesome6 } from '@expo/vector-icons';
-
+import {getvehcileImage} from "../lib/appwrite"
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked, distance1 }) => {
 
   const [selectedSubRouteIndex, setSelectedSubRouteIndex] = useState(0);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [image, setimage] = useState(null)
 
   if (!routes || routes.length === 0) {
     return (
@@ -20,7 +23,11 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked, dist
       </View>
     );
   }
-
+  const showVehicleImage=async(vehicle)=>{
+    setModalVisible(true);
+    const image=await getvehcileImage(vehicle);
+    setimage(image);
+  }
   const renderRoutes = (subRoutes) => {
     if (!subRoutes || subRoutes.length === 0) return null;
 
@@ -130,11 +137,14 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked, dist
                         borderRadius: 8,
                         padding: 8
                       }}>
+                        <TouchableOpacity
+                        onLongPress={()=>{showVehicleImage(transportOption.vehicle)}}
+                        >
                         <Image
                           source={icons[getVehicleIcon(transportOption.vehicle)]}
                           style={{ width: 40, height: 40 }}
                           resizeMode="contain"
-                        />
+                        /></TouchableOpacity>
                       </View>
                       <View style={{ marginLeft: 10, flex: 1 }}>
                         <Text style={{ fontSize: 14, color: '#333', fontFamily: "psemibold" }}>{transportOption.vehicle}</Text>
@@ -316,8 +326,67 @@ const RouteDisplay = ({ routes, selectedRouteIndex, onRouteSelect, clicked, dist
       <ScrollView style={{ padding: 10 }}>
         {renderRoutes(routes[selectedRouteIndex][selectedSubRouteIndex] || routes[selectedRouteIndex][0])}
       </ScrollView>
+
+      <Modal
+      animationType="fade"
+      transparent={true}
+      visible={modalVisible}
+      onRequestClose={() => {setModalVisible(false);setimage(null);}}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Image
+            source={{ uri: image }}
+            style={styles.image}
+            resizeMode="contain"
+          />
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => {setModalVisible(false); setimage(null);}}
+          >
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
     </View>
   );
 };
 
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: screenWidth * 0.9,
+    height: screenHeight * 0.7,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+});
 export default RouteDisplay;

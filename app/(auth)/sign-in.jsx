@@ -4,7 +4,7 @@ import { Link, useRouter } from "expo-router";
 import Toast from "react-native-toast-message";
 import { images } from "../../constants";
 import { CustomButton, FormField } from "../../components";
-import { getCurrentUser, signIn, sendMail } from "../../lib/appwrite";
+import { getCurrentUser, signIn, sendMail, checklastrecoveryMail } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -16,6 +16,7 @@ const SignIn = () => {
     email: "",
     password: "",
   });
+  const [forgotPasswordCooldown, setForgotPasswordCooldown] = useState(false);
 
   const submit = async () => {
     if (form.email === "" || form.password === "") {
@@ -57,6 +58,16 @@ const SignIn = () => {
   };
 
   const handleForgotPassword = async () => {
+    if (forgotPasswordCooldown) {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Please wait before trying again",
+        position: "top",
+      });
+      return;
+    }
+
     const { email } = form;
 
     if (!email) {
@@ -67,17 +78,57 @@ const SignIn = () => {
         position: "top",
       });
       return;
-    } else {
-      try {
-        await sendMail(email);
-      } catch (error) {
+    }
+
+    try {
+      const check = await checklastrecoveryMail(email);
+      console.log(check);
+
+      if (check.documents.length === 0) {
         Toast.show({
           type: "error",
           text1: "Error",
-          text2: error.message,
+          text2: "User does not exist. Check your Email",
           position: "top",
         });
+        setForgotPasswordCooldown(true);
+        setTimeout(() => setForgotPasswordCooldown(false), 60000);
+        return;
       }
+
+      const lastTime = new Date(check.documents[0].ForgotPasswordLastTime).getTime();
+      const currentTime = Date.now();
+
+      if (currentTime - lastTime < 3600000) {
+        Toast.show({
+          type: "error",
+          text1: "Error",
+          text2: "Please wait for an hour before trying again",
+          position: "top",
+        });
+        setForgotPasswordCooldown(true);
+        setTimeout(() => setForgotPasswordCooldown(false), 60000);
+        return;
+      }
+
+      const sent = await sendMail(email, check.documents[0].$id);
+      if (sent) {
+        Toast.show({
+          type: "success",
+          text1: "Recovery email sent",
+          text2: "Please wait for an email to reset your password",
+          position: "top",
+        });
+        setForgotPasswordCooldown(true);
+        setTimeout(() => setForgotPasswordCooldown(false), 60000); // 1 minute cooldown
+      }
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: error.message,
+        position: "top",
+      });
     }
   };
 
@@ -125,7 +176,9 @@ const SignIn = () => {
           />
 
           <View style={{ justifyContent: 'center', paddingTop: 12, flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity onPress={handleForgotPassword}>
+            <TouchableOpacity onPress={handleForgotPassword}
+            disabled={forgotPasswordCooldown}
+            >
               <Text style={{ fontFamily: 'psemibold', color: '#1E90FF', alignSelf: 'center' }}>
                 Forgot Password?
               </Text>

@@ -35,7 +35,7 @@ const TabIcon = ({ icon, color, name, focused }) => {
 
 const CustomTabBar = ({ state, descriptors, navigation }) => {
   return (
-    <View style={{ position: 'absolute', bottom: 0, width: "100%", height: 60, borderTopLeftRadius: 10,borderTopRightRadius:10, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: '#EDEDF0' }}>
+    <View style={{  bottom: 0, width: "100%", height: 60, borderTopLeftRadius: 10,borderTopRightRadius:10, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: '#EDEDF0' }}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key]
         const label = options.tabBarLabel ?? options.title ?? route.name
@@ -93,6 +93,7 @@ export default function TabLayout() {
             return <TabIcon icon={iconName} color={color} name={route.name} focused={focused} />
           },
           headerShown: false,
+          lazy:false
         })}
       >
         <Tabs.Screen name="home" />

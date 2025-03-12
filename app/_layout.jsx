@@ -46,6 +46,8 @@ const RootLayout = () => {
     <GlobalProvider>
       <Stack >
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="advertisement" options={{ headerShown: false }} />
+        <Stack.Screen name="travelplaces" options={{ headerShown: false }} />
         <Stack.Screen name="verifying" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
@@ -67,6 +69,8 @@ const createDbIfNeeded = async (db) => {
         distanceKm REAL,
         District TEXT
       );
+      CREATE INDEX IF NOT EXISTS idx_from ON routes("From");
+      
       CREATE TABLE IF NOT EXISTS locations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         "Name" TEXT NOT NULL,
@@ -81,7 +85,9 @@ const createDbIfNeeded = async (db) => {
         farePKM REAL,
         fareMin REAL,
         fareFixed REAL
-      );`
+      );
+      
+      `
     );
     console.log("Database created");
   } catch (error) {

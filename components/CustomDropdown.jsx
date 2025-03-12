@@ -91,7 +91,7 @@ const EnhancedCustomDropdown = ({
           isSelected && selectedItemStyle,
         ]}
         onPress={() => {
-          onChange(item.value, item.Lat, item.Long);
+          onChange(item.value, item.Lat, item.Long,item.bbox);
           toggleDropdown();
         }}
       >

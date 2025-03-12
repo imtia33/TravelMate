@@ -1,997 +1,856 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Dimensions,StyleSheet,ScrollView ,Modal, FlatList, Animated, Easing,BackHandler} from 'react-native';
-import MapView, { PROVIDER_DEFAULT, Polyline, Marker } from 'react-native-maps';
-import { Ionicons, Entypo,FontAwesome,MaterialIcons } from '@expo/vector-icons';
-import {  useSQLiteContext } from 'expo-sqlite';
+import React, { useState, useRef, useEffect,useMemo,useCallback  } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Dimensions, StyleSheet, Linking , Modal, FlatList, Animated, Easing, BackHandler, ScrollView } from 'react-native';
+import MapView, { PROVIDER_GOOGLE, Polyline, Marker, Circle } from 'react-native-maps';
+import { Ionicons, Entypo, FontAwesome, MaterialIcons, AntDesign, FontAwesome6, Octicons } from '@expo/vector-icons';
+import { useSQLiteContext } from 'expo-sqlite';
+import { icons } from '../../constants';
 import RouteDisplay from '../../components/RouteDisplay';
 import { useGlobalContext } from "../../context/GlobalProvider";
 import * as Location from 'expo-location';
+import Toast from 'react-native-toast-message';
+import { findTop3DistinctRoutes, fetchAndSeparatePaths, merge, combination, polylinemaker, fetchLocationDetails, findBestMatch, fetchSuggestions, fetchSearchSuggestions,findClosestLocation } from "../../lib/pathfinder";
+import Direction from '../../components/Direction';
+import SearchModal from '../../components/SearchModal';
+import BottomSheet from '../../components/BottomSheet';
 const { width, height } = Dimensions.get('window');
+import {getPlaceDetails} from "../../lib/appwrite";
+import { useLocalSearchParams,useFocusEffect  } from 'expo-router';
 
 const customMapStyle = [
   {
     "featureType": "water",
     "elementType": "geometry",
     "stylers": [
-      { "color": "#72ddf7" } 
+      { "color": "#72ddf7" }
     ]
-  }
+  },
 ];
+
 export default function Main() {
-  const {user} = useGlobalContext();  //user is the user object from the global context
-  const db = useSQLiteContext(); //db is the database object from the sqlite context
-  const [routeData, setRouteData] = useState([]); //routeData is the data of the route
-  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0); //selectedRouteIndex is the index of the selected route
-  const [to, setto] = useState("") //to is the destination
-  const [from, setfrom] = useState("") //from is the source
-  const [polylines, setPolylines] = useState([]); //polylines is the array of polylines
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [mapType, setMapType] = useState('standard'); //mapType is the type of the map
-  const [showPath, setShowPath] = useState(false); //showPath is the boolean value to show the path
-  const [location, setLocation] = useState(null); //location is the current location of the user
-  const [heading, setHeading] = useState(null); //heading is the heading of the user
-  const [searchtext, setsearchtext] = useState() //searchtext is the text of the search
-  const [showsearchmarker, setshowsearchmarker] = useState(false) //showsearchmarker is the boolean value to show the search marker
-  const [showsearchlocation, setshowsearchlocation] = useState([]) //showsearchlocation is the array of the search location
-  const [isMarkerVisible, setIsMarkerVisible] = useState(false); //isMarkerVisible is the boolean value to show the marker
-  const [showmainsearch, setshowmainsearch] = useState(false) //showmainsearch is the boolean value to show the main search
-  const [polyliner, setPolyliner] = useState([]); //polyliner is the array of the polylines
-  const [isModalVisible, setisModalVisible] = useState(false); //isModalVisible is the boolean value to show the modal
-  const [clicked, setclicked] = useState(false) //clicked is the boolean value to show the clicked
-  const [resultsfrom, setResultsfrom] = useState([]); //resultsfrom is the array of the results from
-  const [resultsto, setResultsto] = useState([]); //resultsto is the array of the results to
-  const [roaddistance, setroaddistance] = useState([]); //roaddistance is the array of the road distance
-  const [currentdistance, setcurrentdistance] = useState(null); //currentdistance is the current distance
-  const [extrapoly, setExtrapoly] = useState([]); //extrapoly is the array of the extrapoly
-  const [track, settrack] = useState(false); //track is the boolean value to show the track
-  const mapRef = useRef(null); //mapRef is the reference of the map
-  const sidebarAnimation = React.useRef(new Animated.Value(-width)).current; //sidebarAnimation is the animation of the sidebar
-  const bottomSheetAnimation = new Animated.Value(height); //bottomSheetAnimation is the animation of the bottom sheet
+  const { data } = useLocalSearchParams();
+  let place = useMemo(() => (data ? JSON.parse(data) : null), [data]);
+  const hasUpdated = useRef(false);
 
 
-
-
-
-
-
-
-
-
-  //make polyline smoother
-  const smoothPolyline = (points, iterations = 2) => {
-    for (let i = 0; i < iterations; i++) {
-      let newPoints = [];
-      for (let j = 0; j < points.length - 1; j++) {
-        let p1 = points[j];
-        let p2 = points[j + 1];
   
-        let q = [(0.75 * p1[0] + 0.25 * p2[0]), (0.75 * p1[1] + 0.25 * p2[1])];
-        let r = [(0.25 * p1[0] + 0.75 * p2[0]), (0.25 * p1[1] + 0.75 * p2[1])];
+  useFocusEffect(
+    useCallback(() => {
+      if (place) {
+        setState(prevState => ({
+          ...prevState, 
+          isBottomSheetVisible: true,
+          SearchLocationCords: [place.Lat, place.Long],
+          showSearchMarker: true,
+          searchPlace: {
+            Name: place.name,
+            District: place.location,
+            Latitude: place.Lat,
+            Longitude: place.Long,
+          },
+          placeend: [],
+          placeStart: [],
+          placeSearchOn: false,
+          searchText: place.name,
+        }));
   
-        newPoints.push(q, r);
+        mapRef.current?.animateCamera(
+          {
+            center: {
+              latitude: place.Lat,
+              longitude: place.Long,
+            },
+            pitch: 0,
+            heading: 0,
+            zoom: 15,
+          },
+          { duration: 500 }
+        );
       }
-      points = newPoints;
-    }
-    return points;
-  };
+    }, [place])
+  );
+  
+  const { user } = useGlobalContext();
+  const db = useSQLiteContext();
+  const [state, setState] = useState({
+    routeData: [],
+    selectedRouteIndex: 0,
+    to: "",
+    from: "",
+    polylines: [],
+    isSidebarOpen: false,
+    mapType: 'standard',
+    showPath: false,
+    location: null,
+    heading: null,
+    searchText: "",
+    showSearchMarker: false,
+    SearchLocationCords: [],
+    isMarkerVisible: false,
+    showMainSearch: false,
+    polyliner: [],
+    isdirectionVisible: false,
+    clicked: false,
+    resultsFrom: [],
+    resultsTo: [],
+    resultsSearch: [],
+    roadDistance: [],
+    currentDistance: null,
+    track: false,
+    isSearchModalVisible: false,
+    searchPlace:[],
+    isBottomSheetVisible: false,
+    placeSearchOn:false,
+    placeStart:[],
+    placeend:[],
+    dirLoad:false
+    
+  });
 
-  //log center coordinates
-  const logCenterCoordinates = async () => {
-    if (mapRef.current) {
-      const region = await mapRef.current.getCamera();
-    }
-  };
+  const mapRef = useRef(null);
+  const sidebarAnimation = useRef(new Animated.Value(-width)).current;
 
-  //locate current position
-  const locateCurrentPosition = async () => {
-    track ? settrack(false) : settrack(true);
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      return;
-    }
-    let location = await Location.getCurrentPositionAsync({});
-    setLocation(location);
-
-    const locationSubscription = await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.BestForNavigation,
-        timeInterval: 0.001,
-        distanceInterval: 0.001,
-      },
-      (newLocation) => {
-        setLocation(newLocation);
-        mapRef.current?.animateToRegion({
-          latitude: newLocation.coords.latitude,
-          longitude: newLocation.coords.longitude,
-          latitudeDelta: 0.00001, 
-          longitudeDelta: 0.00435, 
-        }, 500);
-      }
-    );
-
-    const headingSubscription = await Location.watchHeadingAsync((newHeading) => {
-      setHeading(newHeading.trueHeading);
-    });
-
-    return () => {
-      locationSubscription.remove();
-      headingSubscription.remove();
-    };
-  }
-
-
- //sidebar style
   const sidebarStyle = {
     transform: [{ translateX: sidebarAnimation }],
   };
 
+
+  
+
   const toggleSidebar = () => {
-    const newValue = isSidebarOpen ? -width : 0;
+    const newValue = state.isSidebarOpen ? -width : 0;
     Animated.timing(sidebarAnimation, {
       toValue: newValue,
       duration: 300,
       easing: Easing.inOut(Easing.ease),
       useNativeDriver: true,
     }).start();
-    setIsSidebarOpen(prev => !prev);
+    setState(prevState => ({ ...prevState, isSidebarOpen: !prevState.isSidebarOpen }));
   };
-  //selecting route 1,2,3....
+
   const handleRouteSelect = (index) => {
-    const selectedDistance = roaddistance[index];
-    setcurrentdistance(selectedDistance);
-    setSelectedRouteIndex(index);
-    if (polylines[index]) {
-      setPolyliner(polylines[index]);
-      setExtrapoly(polylines.filter((_, i) => i !== index));
-    }
+    const selectedDistance = state.roadDistance[index];
+    setState(prevState => ({
+      ...prevState,
+      currentDistance: selectedDistance,
+      selectedRouteIndex: index,
+      polyliner: state.polylines[index],
+    }));
   };
-  //secondary search with from and to
-  const handleSearchPress = async() => {
-    if(from === "" || to === "" && from===to){
+
+  const handleSearchPress = async () => {
+    if (state.from === "" || state.to === "" || state.from === state.to) {
       return;
     }
-    await getBestRoute(from, to);
+    await getBestRoutewithNodes(state.from, state.to);
+
     
-    setclicked(true);
-    setShowPath(true);
-    setIsSidebarOpen(true);
-    toggleSidebar();
-    setisModalVisible(false);
   };
-  //find closest location
-  const findClosestLocation = async () => {
-  try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      console.error('Location permission not granted');
-      return null;
-    }
-    const currentLocation = await Location.getCurrentPositionAsync({});
-    const userPos = {
-      latitude: currentLocation.coords.latitude,
-      longitude: currentLocation.coords.longitude
-    };
-    const locations = await db.getAllAsync('SELECT * FROM locations WHERE single = true');
-    let closestLocation = null;
-    let minDistance = Infinity;
 
-    const toRadians = (degrees) => degrees * (Math.PI / 180);
-    const calculateDistance = (lat1, lon1, lat2, lon2) => {
-      const R = 6371e3; // Earth's radius in meters
-      const φ1 = toRadians(lat1);
-      const φ2 = toRadians(lat2);
-      const Δφ = toRadians(lat2 - lat1);
-      const Δλ = toRadians(lon2 - lon1);
+  const placeSearch = async (search) => {
+    if (!search.trim()) return;
 
-      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const bestMatch = await findBestMatch(search);
 
-      return R * c; // Distance in meters
-    };
+    if (bestMatch) {
+      const fullResult = await fetchLocationDetails(bestMatch);
 
-    for (const loc of locations) {
-      const locCoords = JSON.parse(loc.Coordinates)[0];
-      const distance = calculateDistance(
-        userPos.latitude,
-        userPos.longitude,
-        locCoords[0],
-        locCoords[1]
-      );
+      if (fullResult.length > 0 ) {
+        const location = [fullResult[0].Latitude,fullResult[0].Longitude]
+        setState(prevState => ({
+          ...prevState,
+          to: fullResult[0].Name,
+          searchText: fullResult[0].Name,
+          resultsTo: [],
+          showSearchMarker: true,
+          showMainSearch: false,
+          SearchLocationCords: location
+        }));
+        console.log(SearchLocationCords);
 
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestLocation = loc;
+        mapRef.current?.animateCamera(
+          {
+            center: { latitude: fullResult[0].Latitude, longitude: fullResult[0].Longitude },
+            pitch: 0,
+            heading: 0,
+            zoom: 15,
+          },
+          { duration: 500 }
+        );
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'No coordinates found for the location'
+        });
       }
+    } else {
+      Toast.show({
+        type: 'info',
+        text1: 'Info',
+        text2: 'No locations found'
+      });
     }
+  };
 
-    return closestLocation;
-  } catch (error) {
-    console.error('Error finding closest location:', error);
-    return null;
-  }
+  const handleLayersPress = async() => {
+    setState(prevState => ({
+      ...prevState,
+      mapType: prevState.mapType === 'standard' ? 'hybrid' : 'standard'
+    }));
+   
   };
-  //secondary search with to and closest location using from value
-  const handleSearchPress2 = async () => {
-  if (to === "") {
-    return;
-  }
-  
-  const closestLocation = await findClosestLocation();
-  if (closestLocation) {
-    if(closestLocation.Name===to){
-                  setto(item.Name);
-                  setResultsto([]);
-                  setshowsearchmarker(true);
-                  setshowmainsearch(false);
-                  setclicked(false);  
-                  setShowPath(false);
-                  setRouteData([]);
-                  setPolylines([]);
-                  setPolyliner([]);
-                  setExtrapoly([]);
-                  setshowsearchlocation(JSON.parse(item.Coordinates)[0]);
-                  mapRef.current?.animateCamera({
-                    center: {
-                      latitude: showsearchlocation[0],
-                      longitude: showsearchlocation[1],
-                    },
-                    pitch: 0, // Tilt the camera for a more horizontal view
-                    heading: 0, // Keep the heading north
-                    zoom: 15, // Adjust zoom level as needed
-                    // altitude: 1000, // Adjust altitude for a 3D effect
-                  }, { duration: 500 });
-      return;
-    }
-    await getBestRoute(closestLocation.Name, to);
-    mapRef.current?.animateCamera({
-      center: {
-        latitude: showsearchlocation[0],
-        longitude: showsearchlocation[1],
-      },
-      pitch: 0, // Tilt the camera for a more horizontal view
-      heading: 0, // Keep the heading north
-      zoom: 15, // Adjust zoom level as needed
-      altitude: 1000, // Adjust altitude for a 3D effect
-    }, { duration: 500 });
-    setshowsearchmarker(false);
-    setclicked(true);
-    setShowPath(true);
-    setIsSidebarOpen(true);
-    toggleSidebar();
-    setisModalVisible(false);
-  } else {
-    console.error('No closest location found');
-  }
- };
-  const handleLayersPress = () => {
-    setMapType(prevType => (prevType === 'standard' ? 'hybrid' : 'standard'));
+
+  const handleSearchViewOpen = () => {
+    setState(prevState => ({
+      ...prevState,
+      isdirectionVisible: true
+    }));
   };
-  const handleSearchViewOpen = async() => {
-    setisModalVisible(true)
-  };
-  
-  const fetchSuggestionsfrom = async (input) => {
+
+  const fetchSuggestionsFrom = async (input) => {
     if (input.trim() === '') {
-      setResultsfrom([]);
+      setState(prevState => ({
+        ...prevState,
+        resultsFrom: []
+      }));
       return;
     }
-
     try {
-      const result = await db.getAllAsync(
-        `SELECT * FROM locations WHERE "Name" LIKE ? AND single = true;`,
-        [`%${input}%`]
-      );
-      setResultsfrom(result);
+      const result = await fetchSuggestions('from', input);
+      setState(prevState => ({
+        ...prevState,
+        resultsFrom: result
+      }));
     } catch (err) {
       console.error('Error fetching suggestions:', err);
     }
   };
+
   const fetchSuggestionsTo = async (input) => {
     if (input.trim() === '') {
-      setResultsto([]);
+      setState(prevState => ({
+        ...prevState,
+        resultsTo: []
+      }));
       return;
     }
 
     try {
-      const result = await db.getAllAsync(
-        `SELECT * FROM locations WHERE "Name" LIKE ? AND single = true;`,
-        [`%${input}%`]
-      );
-      setResultsto(result);
+      const result = await fetchSuggestions('to', input);
+      setState(prevState => ({
+        ...prevState,
+        resultsTo: result
+      }));
     } catch (err) {
       console.error('Error fetching suggestions:', err);
     }
   };
-  const findTop3DistinctRoutes = async (start, end) => {
-    const routeCache = new Map();
-    const bestRoutes = [];
-    const visitedStates = new Map();
 
-    const dfs = async (currentNode, path, totalDistance, visited) => {
-        const stateKey = `${currentNode}-${Array.from(visited).join(",")}`;
-        if (visitedStates.has(stateKey) && visitedStates.get(stateKey) <= totalDistance) return;
-        visitedStates.set(stateKey, totalDistance);
-
-        if (currentNode === end) {
-            const newRoute = { path: [...path, end], totalDistance };
-            updateBestRoutes(newRoute);
-            return;
-        }
-
-        visited.add(currentNode);
-
-        const connections = await getRoutesFrom(currentNode);
-        const promises = connections.map(async (connection) => {
-            const nextNode = connection.To;
-            const distance = parseFloat(connection.distanceKm);
-            if (!visited.has(nextNode)) {
-                await dfs(
-                    nextNode,
-                    [...path, currentNode],
-                    totalDistance + distance,
-                    visited
-                );
-            }
-        });
-        await Promise.all(promises);
-
-        visited.delete(currentNode); // Backtrack
-    };
-
-    const getRoutesFrom = async (from) => {
-        if (routeCache.has(from)) return routeCache.get(from);
-
-        const routes = await db.getAllAsync(
-            'SELECT * FROM routes WHERE "From" = ?',
-            from
-        );
-        routeCache.set(from, routes);
-        return routes;
-    };
-
-    const updateBestRoutes = (newRoute) => {
-        if (bestRoutes.length < 10) {
-            bestRoutes.push(newRoute);
-            bestRoutes.sort((a, b) => a.totalDistance - b.totalDistance);
-        } else if (newRoute.totalDistance < bestRoutes[bestRoutes.length - 1].totalDistance ) {
-            bestRoutes.pop();
-            bestRoutes.push(newRoute);
-            bestRoutes.sort((a, b) => a.totalDistance - b.totalDistance);
-        }
-    };
-
-    await dfs(start, [], 0, new Set());
-    const sortedBestRoutes = bestRoutes.sort((a, b) => a.totalDistance - b.totalDistance);
-
-    if (sortedBestRoutes.length < 3) {
-        return sortedBestRoutes;
+  const fetchSuggestionsSearch = async (input) => {
+    if (input.trim() === '') {
+      setState(prevState => ({
+        ...prevState,
+        resultsSearch: []
+      }));
+      return;
     }
 
-    const finalRoutes = [];
-    finalRoutes.push(sortedBestRoutes[0]); // Always include the shortest route
-
-    for (let i = 1; i < sortedBestRoutes.length; i++) {
-        const currentRoute = sortedBestRoutes[i];
-        const distanceDiff1 = currentRoute.totalDistance - finalRoutes[0].totalDistance;
-        const distanceDiff2 = (finalRoutes.length > 1) ? currentRoute.totalDistance - finalRoutes[1].totalDistance : Infinity;
-
-        if (distanceDiff1 >= 0.8 && finalRoutes.length < 3) {
-            finalRoutes.push(currentRoute);
-        } else if (distanceDiff2 >= 0.8 && finalRoutes.length < 3) {
-            finalRoutes.push(currentRoute);
-        }
+    try {
+      const result = await fetchSearchSuggestions(input);
+      setState(prevState => ({
+        ...prevState,
+        resultsSearch: result
+      }));
+    } catch (err) {
+      console.error('Error fetching suggestions:', err);
     }
+  };
 
-    return finalRoutes;
-};
-const fetchAndSeparatePaths = async (path) => {
-  if (!Array.isArray(path) || path.length === 0) {
-    console.error("Invalid path provided to fetchAndSeparatePaths");
-    return [];
-  }
-
-  const queries = path.map((from, i) =>
-      i < path.length - 1
-          ? db.getFirstAsync(
-              'SELECT * FROM routes WHERE "From" = ? AND "To" = ?;',
-              path[i],
-              path[i + 1]
-            )
-          : null
-  );
-  const results = await Promise.all(queries);
-
-  const separated = [];
-  for (const currentData of results) {
-      if (!currentData) continue;
-
-      const vehicles = currentData.Vehicles.replace(/[\[\]]/g, "").split(",").map(vehicle => vehicle.trim());
-      for (const vehicle of vehicles) {
-        separated.push({
-          From: currentData.From,
-          To: currentData.To,
-          Vehicle: vehicle,
-          distance: currentData.distanceKm,
-          fare: await fare(currentData.distanceKm, vehicle),
-          used: false,
-        });
-      }
-  }
-
-  return separated;
-};
-
-const merge = async (docs) => {
-  if (!Array.isArray(docs) || docs.length === 0) {
-    console.error("Invalid documents provided to merge");
-    return [];
-  }
-
-  const mergedResults = [];
-  const usedIndices = new Set();
-
-  for (let i = 0; i < docs.length; i++) {
-      if (usedIndices.has(i)) continue; // Skip if already used
-
-      let currentDoc = { ...docs[i] };
-
-      for (let j = 0; j < docs.length; j++) {
-          if (i !== j && !usedIndices.has(j)) {
-              // Check if the two documents can be merged
-              if (currentDoc.To === docs[j].From && currentDoc.Vehicle === docs[j].Vehicle) {
-                  currentDoc.To = docs[j].To;
-                  currentDoc.distance += docs[j].distance;
-                  usedIndices.add(j);
-              }
-          }
-      }
-      mergedResults.push(currentDoc);
-  }
-  return mergedResults;
-};
-
-
-const combination = (separate, merged, From, To) => {
-  if (!Array.isArray(merged) || merged.length === 0) {
-    console.error("Invalid merged documents provided to combination");
-    return [];
-  }
-
-  const comb = [];
-  
-  for (const doc of merged) {
-      if (doc.used || doc.Vehicle === "Walk") continue;
-
-      let temp = [];
-      if (doc.From === From && doc.To === To) {
-          temp.push(doc);
-          const matchingMerged = merged.filter(d => d.From === From && d.To === To && d.Vehicle !== doc.Vehicle);
-          
-          temp.push(...matchingMerged);
-          comb.push(temp);
-
-          matchingMerged.forEach(d => d.used = true);
-          doc.used = true;
+  const getBestRoutewithNodes = async (From, To) => {
+    try {
+      let bestRoute = await findTop3DistinctRoutes(From, To);
+      let data = [];
+      let newPolylines = [];
+      for (const doc of bestRoute) {
+        if (!doc.path) {
+          console.error("Invalid path in bestRoute document:", doc);
           continue;
+        }
+        state.roadDistance.push(doc.totalDistance);
+        let separate = await fetchAndSeparatePaths(doc.path);
+        let merged = await merge(separate);
+        let res = await combination(separate, merged, From, To);
+        
+        data.push(res);
+        let polylineData = await polylinemaker(doc.path);
+        newPolylines.push(polylineData);
       }
-      
-      temp.push(doc);
-      let lastSegment = temp[temp.length - 1];
-      let lastTo = lastSegment.To;
-      
-      const visited = new Set(); 
-      
-      const addMatchingSegments = (currentTo) => {
-          if (visited.has(currentTo)) return;
-          visited.add(currentTo);
+      setState(prevState => ({
+        ...prevState,
+        routeData: data,
+        polylines: newPolylines,
+        polyliner: newPolylines[0],
+        searchText: "",
+        SearchLocationCords: [],
+        showSearchMarker: false,
+        currentDistance: state.roadDistance[0]
+      }));
+      setState(prevState => ({
+        ...prevState,
+        clicked: true,
+        showPath: true,
+        isSidebarOpen: true,
+        isdirectionVisible: false,
+        isplaceSearchOn:false
+      }));
+      toggleSidebar();
 
-          let matchingMerged = merged.filter(doc => doc.From === currentTo && !doc.used);
-          if (matchingMerged.length > 0) {
-              temp.push(...matchingMerged);
-              lastTo = matchingMerged[0].To;
-
-              let matchingSeparate = separate.filter(doc => 
-                doc.From === matchingMerged[0].From && 
-                doc.To === matchingMerged[0].To && 
-                doc.Vehicle !== matchingMerged[0].Vehicle
-              );
-
-              if (matchingSeparate.length > 0) {
-                  temp.push(...matchingSeparate);
-                  lastTo = matchingSeparate[0].To;
-              }
-              addMatchingSegments(lastTo);
-          } else {
-              let matchingSeparate = separate.filter(doc => doc.From === currentTo && !doc.used);
-              if (matchingSeparate.length > 0) {
-                  temp.push(...matchingSeparate);
-                  lastTo = matchingSeparate[0].To;
-                  addMatchingSegments(lastTo);
-              }
-          }
-      };
-
-      addMatchingSegments(lastTo);
-
-      const addBackwardSegments = (currentFrom) => {
-          if (visited.has(currentFrom)) return;
-          visited.add(currentFrom);
-
-          let matchingMerged = merged.filter(doc => doc.To === currentFrom && !doc.used);
-          if (matchingMerged.length > 0) {
-              temp = [...matchingMerged, ...temp];
-              currentFrom = temp[0].From;
-
-              let matchingSeparate = separate.filter(doc => 
-                doc.To === matchingMerged[0].To && 
-                doc.From === matchingMerged[0].From && 
-                doc.Vehicle !== matchingMerged[0].Vehicle
-              );
-
-              if (matchingSeparate.length > 0) {
-                  temp = [...matchingSeparate, ...temp];
-                  currentFrom = temp[0].From;
-              }
-              addBackwardSegments(currentFrom);
-          } else {
-              let matchingSeparate = separate.filter(doc => doc.To === currentFrom && !doc.used);
-              if (matchingSeparate.length > 0) {
-                  temp = [...matchingSeparate, ...temp];
-                  currentFrom = temp[0].From;
-                  addBackwardSegments(currentFrom);
-              }
-          }
-      };
-
-      addBackwardSegments(lastSegment.From);
-
-      const uniqueTemp = temp.filter((item, index, self) =>
-        index === self.findIndex((t) => (
-          t.From === item.From && t.To === item.To && t.Vehicle === item.Vehicle && t.distance === item.distance && t.fare === item.fare
-        ))
-      );
-
-      if (uniqueTemp.length > 0 && uniqueTemp[uniqueTemp.length - 1].To === To && uniqueTemp[0].From === From) {
-          comb.push(uniqueTemp);
-      }
-  }
-
-    let sortedComb = comb.sort((a, b) => {
-    const uniqueFromA = new Set(a.map(doc => doc.From)).size;
-    const uniqueToA = new Set(a.map(doc => doc.To)).size;
-    const uniqueFromB = new Set(b.map(doc => doc.From)).size;
-    const uniqueToB = new Set(b.map(doc => doc.To)).size;
-
-    return (uniqueFromA + uniqueToA) - (uniqueFromB + uniqueToB);
-  });
-  if(sortedComb.length > 2){
-  sortedComb = sortedComb.slice(0, 2);
-  }
-
-  if (sortedComb[0] && sortedComb[1] && sortedComb[0].length === sortedComb[1].length) {
-      const similarDocs = [];
-
-      for (const doc of sortedComb) {
-          const uniqueFrom = new Set(doc.map(d => d.From));
-          const uniqueTo = new Set(doc.map(d => d.To));
-
-          for (const otherDoc of sortedComb) {
-              if (doc === otherDoc) continue;
-
-              const otherUniqueFrom = new Set(otherDoc.map(d => d.From));
-              const otherUniqueTo = new Set(otherDoc.map(d => d.To));
-
-              const commonFrom = new Set([...uniqueFrom].filter(x => otherUniqueFrom.has(x)));
-              const commonTo = new Set([...uniqueTo].filter(x => otherUniqueTo.has(x)));
-
-              if (commonFrom.size > 0 || commonTo.size > 0) {
-                  similarDocs.push(...otherDoc);
-              }
-          }
-      }
-
-      if (similarDocs.length > 0) {
-          sortedComb[0].push(...similarDocs);
-          return [sortedComb[0]];
-      }
-  }
-
-  return sortedComb;
-};
-
-
-const getBestRoute = async (From, To) => {
-  try {
-    let bestRoute = await findTop3DistinctRoutes(From, To);
-    let data = [];
-    let newPolylines = [];
-    for (const doc of bestRoute) {
-      if (!doc.path) {
-        console.error("Invalid path in bestRoute document:", doc);
-        continue;
-      }
-      roaddistance.push(doc.totalDistance)
-      let separate = await fetchAndSeparatePaths(doc.path);
-      let merged = await merge(separate);
-      let res = combination(separate, merged, From, To);
-      data.push(res);
-      let polylineData = await polylinemaker(doc.path);
-      newPolylines.push(polylineData);
+    } catch (error) {
+      console.error("Error in getBestRoutewithNodes:", error);
     }
-    setRouteData(data);
-    setPolylines(newPolylines);
-    setPolyliner(newPolylines[0]);
-    setExtrapoly(newPolylines.filter((_, i) => i !== 0));
-    const selectedDistance = roaddistance[0];
-    setcurrentdistance(selectedDistance);
-    
-  } catch (error) {
-    console.error("Error in getBestRoute:", error);
-  }
-};
-const fetchFare = async () => {
-  try {
-    const fareData = await db.getAllAsync('SELECT * FROM Fare');
-    const fareRules = {};
-    fareData.forEach((item) => {
-      fareRules[item.Vehicle] = {
-        farePKM: item.farePKM,
-        fareMin: item.fareMin,
-        fareFixed: item.fareFixed,
-      };
+  };
+
+  const locateCurrentPosition = async () => {
+    setState(prevState => ({
+      ...prevState,
+      track: !prevState.track
+    }));
+    if (!state.track) {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+      if (headingSubscription) {
+        headingSubscription.remove();
+      }
+      return;
+    }
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      return;
+    }
+    let location = await Location.getCurrentPositionAsync({});
+    setState(prevState => ({
+      ...prevState,
+      location: location
+    }));
+
+    mapRef.current?.animateToRegion({
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      latitudeDelta: 0.00001,
+      longitudeDelta: 0.00435,
+    }, 500);
+
+    const locationSubscription = await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 0.301,
+        distanceInterval: 0.4,
+      },
+      (newLocation) => {
+        setState(prevState => ({
+          ...prevState,
+          location: newLocation
+        }));
+      }
+    );
+
+    const headingSubscription = await Location.watchHeadingAsync((newHeading) => {
+      setState(prevState => ({
+        ...prevState,
+        heading: newHeading.trueHeading
+      }));
     });
 
-    return fareRules;
-  } catch (error) {
-    return {};
-  }
-};
+    return () => {
+      locationSubscription.remove();
+      headingSubscription.remove();
+    };
+  };
+ const closeandclear = () => {
+    setState(prevState => ({ ...prevState, isBottomSheetVisible: false,
+      searchText: "",
+      SearchLocationCords: [],
+      showSearchMarker: false,
+      showMainSearch: false,
+      searchPlace:[],
+      placeStart:[],
+      placeend:[],
+      selectedRouteIndex:0,
+      place:null
+      
 
-const fare = async (distance, vehicle) => {
-  const fareRules = await fetchFare(); 
-  if (!fareRules[vehicle]) return 0;
-  const rule = fareRules[vehicle];
-  if (rule.fareFixed !== null) return rule.fareFixed;
-  if (rule.farePKM !== null) {
-    return Math.max(Math.ceil(distance * rule.farePKM), rule.fareMin);
-  }
-  return 0;
-};
+     }));
+ }
+  useEffect(() => {
+    if(state.SearchLocationCords.length > 0){
+      setState(prevState => ({
+        ...prevState,
+        showPath: false,
+        polyliner: [],
+        polylines:[],
+        routeData:[],
+        clicked:false
+      }));
+    }
+  }, [state.SearchLocationCords]);
 
-const polylinemaker = async (path) => {
-  const queries = [];
-  for (let i = 0; i < path.length - 1; i++) {
-    let res = await db.getFirstAsync('SELECT * FROM locations WHERE "Name" = ?', `${path[i]}-${path[i + 1]}`);
-         if(i<path.length - 1){
-          
-          if (res && res.Coordinates2) {
-            const coordinatesArray = JSON.parse(res.Coordinates2);
-            queries.push(...coordinatesArray);
-          }
-         }
-         else{
-          if (res && res.Coordinates) {
-           const coordinatesArray = JSON.parse(res.Coordinates);
-           queries.push(...coordinatesArray);
-          }
-         }
-         
-  }
-  //console.log(queries)
-  return queries;
-};
-
- return (
-  <View style={{flex: 1, marginBottom: 0, backgroundColor: '#EDEDF0'}}>
-    <MapView
-      ref={mapRef}
-      provider={PROVIDER_DEFAULT}
-      style={{...StyleSheet.absoluteFillObject}}
-      customMapStyle={customMapStyle} 
-      mapType={mapType}
-      showsCompass={true}
-      showsTraffic={true}
-      initialRegion={{
-        latitude: user.Lat,
-        longitude: user.Long,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
-      }}
-    >
-      {
-        polylines.map((poly, index) => (
-          <React.Fragment key={index}>
-          <Polyline
-            coordinates={poly.map(([longitude, latitude]) => ({
-              latitude,
-              longitude,
-            }))}
-            strokeColor="#5f5f78"
-            strokeWidth={12}
-          />
-          <Polyline
-            coordinates={poly.map(([longitude, latitude]) => ({
-              latitude,
-              longitude,
-            }))}
-            strokeColor="#D9EAFD"
-            strokeWidth={8}
-            tappable={true}
-            onPress={() => {
-              setSelectedRouteIndex(index);
-              setPolyliner(poly);
-              const extraPolylines = polylines.filter((_, i) => i !== index).slice(0, 2); // Get up to 2 extra polylines
-              setExtrapoly(extraPolylines);
-            }}
-          />
-          </React.Fragment>
-        ))
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (state.isdirectionVisible || state.isSearchModalVisible) {
+        setState(prevState => ({
+          ...prevState,
+          isdirectionVisible: false,
+          isSearchModalVisible: false
+        }));
+        return true;
       }
-      {(showPath && polyliner) && (
-        <>
-        <Polyline
-          coordinates={polyliner.map(([longitude, latitude]) => ({
-            latitude,
-            longitude,
-          }))}
-          strokeColor="#030370"
-          strokeWidth={14}
-        />
-        <Polyline
-          coordinates={polyliner.map(([longitude, latitude]) => ({
-            latitude,
-            longitude,
-          }))}
-          strokeColor="#0000FF"
-          strokeWidth={10}
-          tappable={true}
-        /></>
-      )}
-      
-      {polyliner.length > 0 && (
-        <Marker
-          coordinate={{
-            latitude: polyliner[polyliner.length - 1][1],
-            longitude: polyliner[polyliner.length - 1][0],
-          }}
-          title={to}
-        />
-      )}
-      {showsearchlocation&&showsearchmarker && (
-        <Marker
-          coordinate={{
-            latitude: showsearchlocation[0],
-            longitude: showsearchlocation[1],
-          }}
-          title={to}
-        />
-      )}
-      
-      {location && track && (
-        <Marker
-          coordinate={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          }}
-          rotation={heading}
-          anchor={{ x: 0.5, y: 0.5 }}
-        >
-          <MaterialIcons style={{left:11,top:2}} name="navigation" size={30} color="#FD366E" />
-        </Marker>
-      )}
-    </MapView>
-    {isMarkerVisible && (
-      <View style={{position: 'absolute', top: '50%', left: '50%', marginLeft: -16, marginTop: -28}}>
-        <Text style={{fontSize: 24, color: 'red'}}>📍</Text>
-      </View>
-    )}
+      return false;
+    });
 
-    <View style={{position: 'absolute', top: 40, left: 10, right: 10, height: 50, backgroundColor: '#c1d3fe', borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, elevation: 5}}>
-      {clicked && (
-        <TouchableOpacity onPress={toggleSidebar} style={{padding: 5}}>
-          <Ionicons name="menu" size={24} color="black" />
-        </TouchableOpacity>
-      )}
-      <TextInput
-        style={{flex: 1, height: 40, marginLeft: 10, fontSize: 16}}
-        placeholder="Search here"
-        placeholderTextColor="#000"
-        value={to}
-        onChangeText={(text) => {
-          setshowmainsearch(true);
-          setto(text);
-          fetchSuggestionsTo(text);
+    return () => backHandler.remove();
+  }, [state.isdirectionVisible, state.isSearchModalVisible]);
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const toRad = (value) => (value * Math.PI) / 180;
+    const R = 6371; // Earth's radius in kilometers
+  
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+  
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  
+    return R * c; // Distance in kilometers
+  };
+  
+  const getBestRoutewithSearch = async (From, To,slat,slong,ulat,ulong) => {
+    try {
+      let bestRoute = await findTop3DistinctRoutes(From, To);
+      let data = [];
+      let newPolylines = [];
+      for (const doc of bestRoute) {
+        if (!doc.path) {
+          console.error("Invalid path in bestRoute document:", doc);
+          continue;
+        }
+        state.roadDistance.push(doc.totalDistance);
+        let separate = await fetchAndSeparatePaths(doc.path);
+        let merged = await merge(separate);
+        let res = await combination(separate, merged, From, To);
+        let polylineData = await polylinemaker(doc.path);
+        state.placeStart.push([ulat, ulong]);
+        state.placeStart.push([polylineData[0][1], polylineData[0][0]]);
+        state.placeend.push([polylineData[polylineData.length-1][1], polylineData[polylineData.length-1][0]]);
+        state.placeend.push([slat, slong]);
+        newPolylines.push(polylineData);
+        const distance = calculateDistance(ulat, ulong, polylineData[0][1], polylineData[0][0]);
+        const n={"From": "Your Location", "To": doc.path[0], "Vehicle": "Walk", "distance": distance, "fare": 0, "used": false}
+        const distance2 = calculateDistance(polylineData[polylineData.length-1][1], polylineData[polylineData.length-1][0], slat, slong);
+        let n2;
+        if (doc.path[doc.path.length-1] !== state?.searchText) {
+          n2 = {"From": doc.path[doc.path.length-1], "To": state?.searchText, "Vehicle": "Walk", "distance": distance2, "fare": 0, "used": false};
+        }
+        res.forEach((route) => {
+          route.unshift(n);
+          if (n2) {
+            route.push(n2);
+          }
+        });
+        
+        data.push(res);
+
+      }
+      setState(prevState => ({
+        ...prevState,
+        routeData: data,
+        polylines: newPolylines,
+        polyliner: newPolylines[0],
+        searchText: "",
+        SearchLocationCords: [],
+        showSearchMarker: false,
+        currentDistance: state.roadDistance[0],
+        clicked: true,
+        showPath: true,
+        isSidebarOpen: true,
+        isdirectionVisible: false,
+        placeSearchOn:true
+      }));
+      toggleSidebar();
+
+    } catch (error) {
+      console.error("Error in getBestRoutewithNodes:", error);
+    }
+  };
+ const fetchdirectiontosearch=async(lat,long)=>{
+      setState(prevState => ({ ...prevState, dirLoad: true }));
+  
+      const directionTo=await findClosestLocation(lat,long);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.error('Location permission not granted');
+        return ;
+      }
+      
+      const currentLocation = await Location.getCurrentPositionAsync({});
+      const userPos = {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude
+      };
+      const directionFrom = await findClosestLocation(userPos.latitude, userPos.longitude);
+      if (!directionFrom || !directionTo) {
+        Toast.show({
+          type: 'error',
+          text1: 'Error fetching directions',
+        });
+        return null;
+      }
+      await getBestRoutewithSearch(directionFrom, directionTo,lat,long,userPos.latitude,userPos.longitude);
+      setState(prevState => ({
+        ...prevState,
+        isBottomSheetVisible: false,
+        searchPlace:[],
+        SearchLocationCords:[],
+        dirLoad: false
+      }));
+
+ }
+ const generateArcPath = (start, end, steps = 50) => {
+  if (!Array.isArray(start) || !Array.isArray(end) || start.length < 2 || end.length < 2) {
+    console.warn("Invalid coordinates:", start, end);
+    return [];
+  }
+
+  const [lat1, lon1] = start; 
+  const [lat2, lon2] = end;
+
+  // Calculate distance (approximate)
+  const distance = Math.sqrt((lat2 - lat1) ** 2 + (lon2 - lon1) ** 2);
+
+  // Dynamically adjust arc height & steps
+  const arcHeight = Math.min(distance * 0.3, 0.002); // Max height of 0.002 degrees
+  const dynamicSteps = Math.max(Math.floor(distance * 5000), 20); // More points for long distances
+
+  let curvePoints = [];
+
+  for (let i = 0; i <= dynamicSteps; i++) {
+    const t = i / dynamicSteps;
+    const lat = (1 - t) * lat1 + t * lat2;
+    const lon = (1 - t) * lon1 + t * lon2;
+
+    // Arc effect (adjusted for short distances)
+    const arcOffset = Math.sin(t * Math.PI) * arcHeight;
+    curvePoints.push([lat + arcOffset, lon]);
+  }
+
+  // Convert `[lat, lon]` to `{ latitude, longitude }`
+  return curvePoints.map(([latitude, longitude]) => ({ latitude, longitude }));
+};
+ const getLongPressPlace=async(lat ,long)=>{
+  setState(prevState => ({ ...prevState, 
+    isBottomSheetVisible: true,
+    SearchLocationCords: [lat, long],
+    showSearchMarker:true
+   }));
+     const res= await getPlaceDetails(lat, long);
+    const r1={
+      "Name": res.display_name,
+      "District": res.address.state_district,
+      "Latitude": JSON.parse(res.lat),
+      "Longitude": JSON.parse(res.lon),
+    }
+     setState(prevState => ({ ...prevState, searchPlace: r1 }));
+     mapRef.current?.animateCamera(
+       {
+         center: {
+           latitude: JSON.parse(res.lat),
+           longitude: JSON.parse(res.lon),
+         },
+         pitch: 0,
+         heading: 0,
+         zoom: 15,
+       },
+       { duration: 500 },
+     );
+     setState(prevState => ({ ...prevState,
+      
+       placeend:[],
+       placeStart:[],
+       placeSearchOn:false,
+       setSearchText: res.display_name,
+      }));
+ }
+  return (
+    <View style={{ flex: 1, marginBottom: 0, backgroundColor: '#EDEDF0' }}>
+      <MapView
+        ref={mapRef}
+        provider={PROVIDER_GOOGLE}
+        style={{ ...StyleSheet.absoluteFillObject }}
+        customMapStyle={customMapStyle}
+        mapType={state.mapType}
+        showsCompass={true}
+        showsTraffic={true}
+        showsBuildings={false}
+        followsUserLocation={true}
+        onLongPress={(e) => {
+          getLongPressPlace(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude);
         }}
-      />
-      {resultsto.length > 0 && !(resultsto.length === 1 && from === resultsto[0].Name) && showmainsearch && (
-        <View style={{position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: 'white', borderRadius: 10, elevation: 5, width: 300}}>
-          <FlatList
-            data={resultsto}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <TouchableOpacity 
-                onPress={() => {
-                  setto(item.Name);
-                  setResultsto([]);
-                  setshowsearchmarker(true);
-                  setshowmainsearch(false);
-                  setclicked(false);  
-                  setShowPath(false);
-                  setRouteData([]);
-                  setPolylines([]);
-                  setPolyliner([]);
-                  setExtrapoly([]);
-                  setshowsearchlocation(JSON.parse(item.Coordinates)[0]);
-                  mapRef.current?.animateCamera({
-                    center: {
-                      latitude: showsearchlocation[0],
-                      longitude: showsearchlocation[1],
-                    },
-                    pitch: 0, // Tilt the camera for a more horizontal view
-                    heading: 0, // Keep the heading north
-                    zoom: 15, // Adjust zoom level as needed
-                    // altitude: 1000, // Adjust altitude for a 3D effect
-                  }, { duration: 500 });
-                }}
-                style={{paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ccc'}}
-              >
-                <Text style={{ fontSize: 16, color: '#212121' }}>{item.Name}</Text>
-              </TouchableOpacity>
-            )}
-            style={{ maxHeight: 150 }}
-            nestedScrollEnabled
-          />
-        </View>
-      )}
-      {useEffect(() => {
-        const backHandler = () => {
-          setshowmainsearch(false);
-          return true;
-        };
-
-        const backHandlerListener = BackHandler.addEventListener('hardwareBackPress', backHandler);
-
-        return () => backHandlerListener.remove();
-      }, [])}
-      <TouchableOpacity onPress={handleSearchPress2} style={{padding: 5}}>
-        <Ionicons name="search" size={24} color="black" />
-      </TouchableOpacity>
-    </View>
-    
-    <TouchableOpacity onPress={handleLayersPress} style={{position: 'absolute', bottom: 100, alignSelf:'start', backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5,left:10}}>
-      <Ionicons name="layers" size={24} color="#5DB996" />
-    </TouchableOpacity>
-    <View style={{position: 'absolute', top: 150, right: 10, flexDirection: 'column', alignItems: 'center'}}>
-      {polylines.map((_, index) => ( 
-        <TouchableOpacity
-          key={index}
-          onPress={() => handleRouteSelect(index)}
-          style={{backgroundColor: selectedRouteIndex === index ? '#4169E1' : 'white', borderRadius: 20, width: 40, height: 40, elevation: 5, marginBottom: 10, justifyContent:'center', alignItems:'center'}}
-        >
-          <Text style={{fontSize: 16, color: selectedRouteIndex === index ? 'white' : 'black', alignSelf:'center'}}>{index + 1}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-    <TouchableOpacity onPress={locateCurrentPosition} style={{position: 'absolute', bottom: 100, right: 10, backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5}}>
-      <Ionicons name="locate" size={24} color="black" />
-    </TouchableOpacity>
-    <TouchableOpacity 
-      onPress={handleSearchViewOpen} 
-      style={{position: 'absolute', bottom: 150, right: 10, backgroundColor: '#5571b5', borderRadius: 20, padding: 10, elevation: 5}}>
-      <MaterialIcons name="directions" size={24} color="white" />
-    </TouchableOpacity>
-    <Animated.View style={[{position: 'absolute', top: 0, left: 0, width: '100%', height: '120%', backgroundColor: '#c1d3fe', elevation: 10}, sidebarStyle]}>
-      <TouchableOpacity onPress={toggleSidebar} style={{position: 'absolute', top: 40, right: 10, zIndex: 1}}>
-        <Ionicons name="close" size={24} color="black" />
-      </TouchableOpacity>
-      <View style={{flex: 1, paddingTop: 40, width: '100%', paddingHorizontal: 5, marginBottom:0}}>
-        {routeData.length > 0 && (
-        <RouteDisplay 
-          routes={routeData} 
-          selectedRouteIndex={selectedRouteIndex}
-          onRouteSelect={handleRouteSelect}
-          distance1={roaddistance}
-        />)}
-      </View>
-    </Animated.View>
-    {isModalVisible && (
-      <>
-        <View style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#FFFFFF'}}>
-          <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingHorizontal: 8, top:50}}>
-            <TouchableOpacity
-              style={{padding: 8, bottom:50,right:10}}
-              onPress={() => setisModalVisible(false)}
-            >
-              <Ionicons name="arrow-back" size={24} color="black" />
-            </TouchableOpacity>
-            <View style={{flexDirection:'column', justifyContent:'space-between', height:75,alignContent:'center'}}>
-              <FontAwesome style={{marginLeft:1}} name={from.length > 0 ? "dot-circle-o" : "circle-o"} size={17} color={from.length > 0 ? "#1f9cbf" : "black"} />
-              <Entypo style={{marginLeft:1}} name="dots-three-vertical" size={16} color="black"/>
-              <MaterialIcons style={{right:1,}} name="my-location" size={19} color="red" />
-            </View>
+        initialRegion={{
+          latitude: user.Lat,
+          longitude: user.Long,
+          latitudeDelta: 0.0922,
+          longitudeDelta: 0.0421,
+        }}
+      >
+        {state.showPath && state.polyliner && (
+          <>
+            <Polyline
+              coordinates={state.polyliner.map(([longitude, latitude]) => ({
+                latitude,
+                longitude,
+              }))}
+              strokeColor="#030370"
+              strokeWidth={14}
+            />
             
-            <View style={{flex: 1, marginLeft: 3, marginRight: 5}}>
-              <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 8}}>
-                <View style={{flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2}}>
-                  <TextInput
-                    style={{fontSize: 16, color: '#212121', paddingVertical: 8, paddingHorizontal: 16}}
-                    placeholder="Your location"
-                    placeholderTextColor="#5F6368"
-                    value={from}
-                    onChangeText={(text) => {
-                      setfrom(text);
-                      fetchSuggestionsfrom(text);
-                    }}
-                  />
-                  {resultsfrom.length > 0 && !(resultsfrom.length === 1 && from === resultsfrom[0].Name) && (
-                    <FlatList
-                      data={resultsfrom}
-                      keyExtractor={(item) => item.id.toString()}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity 
-                          onPress={() => {
-                            setfrom(item.Name);
-                            setResultsfrom([]);
-                          }}
-                          style={{paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ccc'}}
-                        >
-                          <Text style={{ fontSize: 16, color: '#212121' }}>{item.Name}</Text>
-                        </TouchableOpacity>
-                      )}
-                      style={{ maxHeight: 150 }}
-                      nestedScrollEnabled
-                    />
-                  )}
-                </View>
-              </View>
+            <Polyline
+              coordinates={state.polyliner.map(([longitude, latitude]) => ({
+                latitude,
+                longitude,
+              }))}
+              strokeColor="#0000FF"
+              strokeWidth={10}
+            />
+          </>
+        )}
+        {state.placeSearchOn && (
+              <>
+                <Polyline
+                  coordinates={generateArcPath(state.placeStart[0], state.placeStart[state.placeStart.length - 1])}
+                  strokeColor={state.mapType === 'hybrid' ? '#0000FF' : 'rgb(104, 107, 107)'}
+                  strokeWidth={7}
+                  lineDashPattern={[5, 5]} // Dotted effect
+                  tappable={true}
+                  onPress={() => {
+                    const [startLat, startLong] = state.placeStart[0]; // First coordinate [lat, long]
+                    const [endLat, endLong] = state.placeStart[state.placeStart.length - 1]; // Last coordinate [lat, long]
 
-              <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                <View style={{flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2}}>
-                  <TextInput
-                    style={{fontSize: 16, color: '#212121', paddingVertical: 8, paddingHorizontal: 16}}
-                    placeholder="Choose destination"
-                    placeholderTextColor="#5F6368"
-                    value={to}
-                    onChangeText={(text) => {
-                      setto(text);
-                      fetchSuggestionsTo(text);
-                    }}
-                  />
-                  {resultsto.length > 0 && !(resultsto.length === 1 && from === resultsto[0].Name) && (
-                    <FlatList
-                      data={resultsto}
-                      keyExtractor={(item) => item.id.toString()}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity 
-                          onPress={() => {
-                            setto(item.Name);
-                            setResultsto([]);
-                          }}
-                          style={{paddingVertical: 8, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#ccc'}}
-                        >
-                          <Text style={{ fontSize: 16, color: '#212121' }}>{item.Name}</Text>
-                        </TouchableOpacity>
-                      )}
-                      style={{ maxHeight: 150 }}
-                      nestedScrollEnabled
-                    />
-                  )}
-                </View>
-              </View>
-            </View>
+                    const url = `https://www.google.com/maps/dir/?api=1&origin=${startLat},${startLong}&destination=${endLat},${endLong}&travelmode=walking`;
 
-            <TouchableOpacity
-              style={{padding: 8, width: 46, height: 46, borderRadius:25, backgroundColor:'#4285F4', alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4}}
-              onPress={handleSearchPress}
+                    Linking.openURL(url).catch((err) => console.error("Failed to open Google Maps", err));
+                  }}
+                />
+                <Polyline
+                  coordinates={generateArcPath(state.placeend[0], state.placeend[state.placeend.length - 1])}
+                  strokeColor={state.mapType === 'hybrid' ? '#0000FF' : 'rgb(99, 101, 101)'}
+                  strokeWidth={7}
+                  lineDashPattern={[5, 5]} // Dotted effect
+                  onPress={() => {
+                    const start = state.placeend[0]; // First coordinate [lat, long]
+                    const end = state.placeend[state.placeend.length - 1]; // Last coordinate [lat, long]
+                
+                    const url = `https://www.google.com/maps/dir/?api=1&origin=${start[0]},${start[1]}&destination=${end[0]},${end[1]}&travelmode=walking`;
+                
+                    Linking.openURL(url).catch((err) => console.error("Failed to open Google Maps", err));
+                  }}
+                  tappable={true}
+                />
+              </>
+            )}
+        {state.showPath && state.polyliner.length > 0 && !state.placeSearchOn&&(
+          <Marker
+            coordinate={{
+              latitude: state.polyliner[state.polyliner.length - 1][1],
+              longitude: state.polyliner[state.polyliner.length - 1][0],
+            }}
+            title={state.to}
+          />
+        )}
+        {state.showPath && state.polyliner.length > 0 && state.placeSearchOn&&(
+          <Marker
+          coordinate={{
+            latitude: state.placeend[state.placeend.length - 1][0],
+            longitude: state.placeend[state.placeend.length - 1][1],
+          }}
+            title={state.to}
+          />
+        )}
+        {!state.showPath && state.SearchLocationCords && state.showSearchMarker && (
+          <Marker
+            coordinate={{
+              latitude: state.SearchLocationCords[0],
+              longitude: state.SearchLocationCords[1],
+            }}
+            title={state.searchText}
+          />
+        )}
+        {state.location && state.track && (
+          <>
+            <Marker
+              coordinate={{
+                latitude: state.location.coords.latitude,
+                longitude: state.location.coords.longitude,
+              }}
+              rotation={state.heading}
+              anchor={{ x: 0.5, y: 0.5 }}
+              calloutAnchor={{ x: 0.5, y: 0.5 }}
+              flat={true}
             >
-              <Ionicons name="search" size={24} color="white" />
-            </TouchableOpacity>
-          </View>
+              <View style={{ justifyContent: 'center', alignItems: 'center', right: -17.3, top: 17, transform: [{ rotate: '8deg' }] }}>
+                <FontAwesome6 name="circle" size={15} color="#fff" />
+                <Octicons name="dot-fill" size={26} color="#0000FF" style={{ position: 'absolute', alignSelf: 'center' }} />
+                <AntDesign name="caretup" size={17} color="rgb(164, 41, 109)" style={{ position: 'absolute', alignSelf: 'center', transform: [{ rotate: '25deg' }], bottom: 12, right: -5 }} />
+              </View>
+            </Marker>
+            <Circle
+              center={{
+                latitude: state.location.coords.latitude,
+                longitude: state.location.coords.longitude,
+              }}
+              radius={10}
+              fillColor="rgba(12, 150, 242, 0.5)"
+              strokeColor="rgba(39, 100, 198, 0.86)"
+              strokeWidth={1}
+              zIndex={1000}
+            />
+          </>
+        )}
+    
+      </MapView>
+      
+      <View style={{ position: 'absolute', top: 40, left: 10, right: 10, height: 50, backgroundColor: '#c1d3fe', borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, elevation: 5 }}>
+        {state.clicked && (
+          <TouchableOpacity onPress={toggleSidebar} style={{ padding: 5 }}>
+            <Ionicons name="menu" size={24} color="black" />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={{ flex: 1, height: 40, marginLeft: 10, fontSize: 16, justifyContent: 'center' }}
+          onPress={() => {
+            setState(prevState => ({
+              ...prevState, 
+              isSearchModalVisible: true, 
+              isBottomSheetVisible: false,
+              
+
+            }));
+          }}
+        >
+          {state.searchText.length > 0 ? <Text style={{ color: '#000' }}>{state.searchText}</Text> : <Text style={{ color: '#000' }}>Search here</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => { setState(prevState => ({ ...prevState, isSearchModalVisible: true })) }} style={{ padding: 5 }}>
+          <Ionicons name="search" size={24} color="black" />
+        </TouchableOpacity>
+      </View>
+      <TouchableOpacity onPress={handleLayersPress} style={{ position: 'absolute', top: 100, right: 10, backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5 }}>
+        <Ionicons name="layers" size={24} color="#5DB996" />
+      </TouchableOpacity>
+      <View style={{ position: 'absolute', top: 150, right: 10, flexDirection: 'column', alignItems: 'center' }}>
+        {state.polylines.map((_, index) => (
+          <TouchableOpacity
+            key={index}
+            onPress={() => handleRouteSelect(index)}
+            style={{ backgroundColor: state.selectedRouteIndex === index ? '#4169E1' : 'white', borderRadius: 20, width: 40, height: 40, elevation: 5, marginBottom: 10, justifyContent: 'center', alignItems: 'center' }}
+          >
+            <Text style={{ fontSize: 16, color: state.selectedRouteIndex === index ? 'white' : 'black', alignSelf: 'center' }}>{index + 1}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <TouchableOpacity onPress={locateCurrentPosition} style={{ position: 'absolute', bottom: 100, right: 10, backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5 }}>
+        <Ionicons name="locate" size={24} color="black" />
+      </TouchableOpacity>
+      {state.routeData.length > 0 && (<TouchableOpacity onPress={()=>(
+        setState(prevState => ({ ...prevState, showPath: false, polyliner: [], routeData: [], clicked: false, roadDistance: [] , placeSearchOn:false,placeStart:[],placeend:[],searchPlace:[],
+          polylines:[], from: "", to: ""
+
+        }))
+      )} style={{ position: 'absolute', bottom: 50, right: 10, backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5 }}>
+        <Ionicons name="close-sharp" size={24} color="black" />
+      </TouchableOpacity>)}
+      <TouchableOpacity
+        onPress={handleSearchViewOpen}
+        style={{ position: 'absolute', bottom: 150, right: 10, backgroundColor: '#5571b5', borderRadius: 20, padding: 10, elevation: 5 }}>
+        <MaterialIcons name="directions" size={24} color="white" />
+      </TouchableOpacity>
+      <Animated.View style={[{ position: 'absolute', top: 0, left: 0, width: '100%', height: '120%', backgroundColor: '#c1d3fe', elevation: 10 }, sidebarStyle]}>
+        <TouchableOpacity onPress={toggleSidebar} style={{ position: 'absolute', top: 40, right: 10, zIndex: 1 }}>
+          <Ionicons name="close" size={24} color="black" />
+        </TouchableOpacity>
+        <View style={{ flex: 1, paddingTop: 40, width: '100%', paddingHorizontal: 5, marginBottom: 0 }}>
+          {state.routeData.length > 0 && (
+            <RouteDisplay
+              routes={state.routeData}
+              selectedRouteIndex={state.selectedRouteIndex}
+              onRouteSelect={handleRouteSelect}
+              distance1={state.roadDistance}
+            />)}
         </View>
-      </>
-    )}
-  </View>
-);
+      </Animated.View>
+      {state.isdirectionVisible && (   
+        <>
+          <Direction
+            from={state.from}
+            setFrom={(value) => setState(prevState => ({ ...prevState, from: value }))}
+            to={state.to}
+            setTo={(value) => setState(prevState => ({ ...prevState, to: value }))}
+            resultsFrom={state.resultsFrom}
+            resultsTo={state.resultsTo}
+            fetchSuggestionsFrom={fetchSuggestionsFrom}
+            fetchSuggestionsTo={fetchSuggestionsTo}
+            handleSearchPress={handleSearchPress}
+            setResultsFrom={(value) => setState(prevState => ({ ...prevState, resultsFrom: value }))}
+            setResultsTo={(value) => setState(prevState => ({ ...prevState, resultsTo: value }))}
+            setSearchLocationCords={(value) => setState(prevState => ({ ...prevState, SearchLocationCords: value }))}
+            mapRef={mapRef}
+            onClose={() => setState(prevState => ({ ...prevState, isdirectionVisible: false }))}
+          />
+        </>
+      )}
+      {state.isSearchModalVisible && (
+        <SearchModal
+        searchText={state.searchText}
+        setSearchText={(value) => setState(prevState => ({ ...prevState, searchText: value }))}
+        setSearchLocationCords={(value) => setState(prevState => ({ ...prevState, SearchLocationCords: value }))}
+        setShowSearchMarker={(value) => setState(prevState => ({ ...prevState, showSearchMarker: value }))}
+        mapRef={mapRef}
+        setsearchPlace={(value) => setState(prevState => ({ ...prevState, searchPlace: value, isBottomSheetVisible: true, placeend: [], placeStart: [], placeSearchOn: false }))}
+        onClose={() => setState(prevState => ({ ...prevState, isSearchModalVisible: false }))}
+        bbox={user.bbox}
+      />
+      )}
+      {state.isBottomSheetVisible &&
+       <BottomSheet
+       setIsBottomSheetVisible={(value) => setState(prevState => ({ ...prevState, isBottomSheetVisible: value }))}
+       closeandclear={closeandclear}
+        >
+          
+          <ScrollView style={{padding: 0}}>
+            <Text style={{fontFamily:'psemibold',fontSize:17,flex:1,marginBottom: 2}}>{state?.searchPlace.Name}</Text>
+            <View style={{flexDirection:'row',marginBottom: 5}}>
+            <Text style={{fontFamily:'pm',fontSize:15,flex:1,marginBottom: 2}}>{state?.searchPlace.District}</Text>
+            <TouchableOpacity
+            disabled={state.dirLoad}
+            onPress={() => {
+            fetchdirectiontosearch(state?.searchPlace.Latitude, state?.searchPlace.Longitude);
+            }}
+        style={{ backgroundColor: 'rgb(15, 169, 135)', borderRadius: 30, padding: 10, elevation: 5,width:45,flexDirection:'row', justifyContent: 'center', alignItems: 'center',right:2 }}>
+          
+          <MaterialIcons name="directions" size={20} color="white" />
+         </TouchableOpacity>
+            </View>
+            <View style={{height:1,width:'100%',backgroundColor: 'rgba(165, 170, 184, 0.5)',marginBottom: 4}}/>
+            
+          </ScrollView>
+          
+        
+      </BottomSheet>
+       
+      }
+      
+      <Toast />
+    </View>
+  );
 }

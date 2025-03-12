@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, use, useContext, useEffect, useState } from "react";
 
 import { getCurrentUser } from "../lib/appwrite";
+import {InsertEverything} from "../lib/dbInsert"
 
 const GlobalContext = createContext();
 export const useGlobalContext = () => useContext(GlobalContext);
@@ -22,13 +23,16 @@ const GlobalProvider = ({ children }) => {
         }
       })
       .catch((error) => {
-        
+        console.log(error);
       })
       .finally(() => {
         setLoading(false);
       });
-      
   }, []);
+  useEffect(() => {
+    InsertEverything();
+
+  },[])
 
   return (
     <GlobalContext.Provider
