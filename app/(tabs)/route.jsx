@@ -377,8 +377,19 @@ export default function Main() {
       placeStart:[],
       placeend:[],
       selectedRouteIndex:0,
-      place:null
-      
+      place:null,
+      polylines:[],
+      routeData:[],
+      roadDistance:[],
+      currentDistance:null,
+      track:false,
+      isSidebarOpen:false,
+      isdirectionVisible:false,
+      clicked:false,
+      resultsFrom:[],
+      resultsTo:[],
+      resultsSearch:[],
+      dirLoad:false
 
      }));
  }
