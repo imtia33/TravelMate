@@ -70,7 +70,6 @@ export default function Main() {
   );
   
   const { user } = useGlobalContext();
-  const db = useSQLiteContext();
   const [state, setState] = useState({
     routeData: [],
     selectedRouteIndex: 0,
@@ -126,7 +125,6 @@ export default function Main() {
     }).start();
     setState(prevState => ({ ...prevState, isSidebarOpen: !prevState.isSidebarOpen }));
   };
-
   const handleRouteSelect = (index) => {
     const selectedDistance = state.roadDistance[index];
     setState(prevState => ({
@@ -136,7 +134,6 @@ export default function Main() {
       polyliner: state.polylines[index],
     }));
   };
-
   const handleSearchPress = async () => {
     if (state.from === "" || state.to === "" || state.from === state.to) {
       return;
@@ -145,53 +142,6 @@ export default function Main() {
 
     
   };
-
-  const placeSearch = async (search) => {
-    if (!search.trim()) return;
-
-    const bestMatch = await findBestMatch(search);
-
-    if (bestMatch) {
-      const fullResult = await fetchLocationDetails(bestMatch);
-
-      if (fullResult.length > 0 ) {
-        const location = [fullResult[0].Latitude,fullResult[0].Longitude]
-        setState(prevState => ({
-          ...prevState,
-          to: fullResult[0].Name,
-          searchText: fullResult[0].Name,
-          resultsTo: [],
-          showSearchMarker: true,
-          showMainSearch: false,
-          SearchLocationCords: location
-        }));
-        console.log(SearchLocationCords);
-
-        mapRef.current?.animateCamera(
-          {
-            center: { latitude: fullResult[0].Latitude, longitude: fullResult[0].Longitude },
-            pitch: 0,
-            heading: 0,
-            zoom: 15,
-          },
-          { duration: 500 }
-        );
-      } else {
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: 'No coordinates found for the location'
-        });
-      }
-    } else {
-      Toast.show({
-        type: 'info',
-        text1: 'Info',
-        text2: 'No locations found'
-      });
-    }
-  };
-
   const handleLayersPress = async() => {
     setState(prevState => ({
       ...prevState,
@@ -246,31 +196,13 @@ export default function Main() {
     }
   };
 
-  const fetchSuggestionsSearch = async (input) => {
-    if (input.trim() === '') {
-      setState(prevState => ({
-        ...prevState,
-        resultsSearch: []
-      }));
-      return;
-    }
-
-    try {
-      const result = await fetchSearchSuggestions(input);
-      setState(prevState => ({
-        ...prevState,
-        resultsSearch: result
-      }));
-    } catch (err) {
-      console.error('Error fetching suggestions:', err);
-    }
-  };
 
   const getBestRoutewithNodes = async (From, To) => {
     try {
       let bestRoute = await findTop3DistinctRoutes(From, To);
       let data = [];
       let newPolylines = [];
+      
       for (const doc of bestRoute) {
         if (!doc.path) {
           console.error("Invalid path in bestRoute document:", doc);
@@ -293,7 +225,8 @@ export default function Main() {
         searchText: "",
         SearchLocationCords: [],
         showSearchMarker: false,
-        currentDistance: state.roadDistance[0]
+        currentDistance: state.roadDistance[0],
+        selectedRouteIndex:0
       }));
       setState(prevState => ({
         ...prevState,
@@ -303,6 +236,7 @@ export default function Main() {
         isdirectionVisible: false,
         isplaceSearchOn:false
       }));
+      
       toggleSidebar();
 
     } catch (error) {
