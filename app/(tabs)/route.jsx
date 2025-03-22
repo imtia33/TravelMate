@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect,useMemo,useCallback  } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Dimensions, StyleSheet, Linking , Modal, FlatList, Animated, Easing, BackHandler, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Dimensions, StyleSheet, Linking ,  Animated, Easing, BackHandler, ScrollView } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Polyline, Marker, Circle } from 'react-native-maps';
-import { Ionicons, Entypo, FontAwesome, MaterialIcons, AntDesign, FontAwesome6, Octicons } from '@expo/vector-icons';
+import { Ionicons, Entypo, FontAwesome, MaterialIcons, AntDesign, FontAwesome6, Octicons, Feather } from '@expo/vector-icons';
 import { useSQLiteContext } from 'expo-sqlite';
 import { icons } from '../../constants';
 import RouteDisplay from '../../components/RouteDisplay';
 import { useGlobalContext } from "../../context/GlobalProvider";
 import * as Location from 'expo-location';
 import Toast from 'react-native-toast-message';
-import { findTop3DistinctRoutes, fetchAndSeparatePaths, merge, combination, polylinemaker, fetchLocationDetails, findBestMatch, fetchSuggestions, fetchSearchSuggestions,findClosestLocation } from "../../lib/pathfinder";
+import { findTop3DistinctRoutes, fetchAndSeparatePaths, merge, combination, polylinemaker, fetchLocationDetails, findBestMatch, fetchSuggestions, fetchSearchSuggestions,findClosestLocation, findshortestPath } from "../../lib/pathfinder";
 import Direction from '../../components/Direction';
 import SearchModal from '../../components/SearchModal';
 import BottomSheet from '../../components/BottomSheet';
@@ -101,7 +101,12 @@ export default function Main() {
     placeSearchOn:false,
     placeStart:[],
     placeend:[],
-    dirLoad:false
+    dirLoad:false,
+    alternativeFrom: "",
+    alternativeTo: "",
+    alternativeButtonShow: false,
+    mainpath: null,
+
     
   });
 
@@ -138,10 +143,83 @@ export default function Main() {
     if (state.from === "" || state.to === "" || state.from === state.to) {
       return;
     }
-    await getBestRoutewithNodes(state.from, state.to);
-
+    const bestFromMatch = await findBestMatch(state.from);
+    const bestToMatch = await findBestMatch(state.to);
+    if(!bestFromMatch || !bestToMatch){
+      Toast.show({
+        type: 'error',
+        text1: 'Error fetching directions.',
+        text2:'See if you have entered a valid location'
+      });
+      return;
+    }
+    await getBestRoutewithNodes(bestFromMatch,bestToMatch);
+    setState(prevState => ({ ...prevState, alternativeButtonShow:true, alternativeFrom: bestFromMatch, alternativeTo: bestToMatch }));
     
   };
+  const handleAlternativeCheck = async () => {
+    try {
+      const alternativePaths = await findTop3DistinctRoutes(state.alternativeFrom, state.alternativeTo);
+      const uniquePaths = alternativePaths.filter((item) => item.totalDistance !== state.mainpath);
+  
+      if (uniquePaths.length === 0) {
+        Toast.show({
+          type: 'error',
+          text1: 'No alternative routes found',
+          text2: 'Sorry, this is the only route available'
+        });
+        setState((prevState) => ({
+          ...prevState,
+          alternativeFrom: "",
+          alternativeTo: "",
+          alternativeButtonShow: false,
+          mainpath: null,
+        }));
+        return;
+      }
+  
+      let data = [];
+      let newPolylines = [];
+      let updatedRoadDistance = [...state.roadDistance]; // Copy the existing road distances
+      let i = 0;
+  
+      for (const doc of uniquePaths) {
+        if (i === 2) break;
+        if (!doc.path) {
+          console.error("Invalid path in bestRoute document:", doc);
+          continue;
+        }
+  
+        // Add the distance of the current path to the roadDistance array
+        updatedRoadDistance.push(doc.totalDistance);
+  
+        let separate = await fetchAndSeparatePaths(doc.path);
+        let merged = await merge(separate);
+        let res = await combination(separate, merged, state.alternativeFrom, state.alternativeTo);
+  
+        data.push(res);
+        let polylineData = await polylinemaker(doc.path);
+        newPolylines.push(polylineData);
+        i++;
+      }
+  
+      setState((prevState) => ({
+        ...prevState,
+        routeData: [...prevState.routeData, ...data],
+        polylines: [...prevState.polylines, ...newPolylines],
+        roadDistance: updatedRoadDistance, // Update state once after the loop
+        alternativeFrom: "",
+        alternativeTo: "",
+        alternativeButtonShow: false,
+        mainpath: null,
+      }));
+  
+      toggleSidebar();
+    } catch (err) {
+      console.error("Error in handleAlternativeCheck:", err);
+    }
+  };
+  
   const handleLayersPress = async() => {
     setState(prevState => ({
       ...prevState,
@@ -198,8 +276,10 @@ export default function Main() {
 
 
   const getBestRoutewithNodes = async (From, To) => {
+    
     try {
-      let bestRoute = await findTop3DistinctRoutes(From, To);
+      let bestRoute = await findshortestPath(From, To);
+      
       let data = [];
       let newPolylines = [];
       
@@ -210,8 +290,11 @@ export default function Main() {
         }
         state.roadDistance.push(doc.totalDistance);
         let separate = await fetchAndSeparatePaths(doc.path);
+        
         let merged = await merge(separate);
+        
         let res = await combination(separate, merged, From, To);
+        
         
         data.push(res);
         let polylineData = await polylinemaker(doc.path);
@@ -226,15 +309,13 @@ export default function Main() {
         SearchLocationCords: [],
         showSearchMarker: false,
         currentDistance: state.roadDistance[0],
-        selectedRouteIndex:0
-      }));
-      setState(prevState => ({
-        ...prevState,
+        selectedRouteIndex:0,
         clicked: true,
         showPath: true,
         isSidebarOpen: true,
         isdirectionVisible: false,
-        isplaceSearchOn:false
+        isplaceSearchOn:false,
+        mainpath: bestRoute[0].totalDistance,
       }));
       
       toggleSidebar();
@@ -715,6 +796,13 @@ export default function Main() {
       )} style={{ position: 'absolute', bottom: 50, right: 10, backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5 }}>
         <Ionicons name="close-sharp" size={24} color="black" />
       </TouchableOpacity>)}
+      {state.alternativeButtonShow && (
+         <TouchableOpacity
+         onPress={handleAlternativeCheck}
+         style={{ position: 'absolute', bottom: 200, right: 10, backgroundColor: '#5571b5', borderRadius: 20, padding: 10, elevation: 5 }}>
+         <Feather name="git-pull-request" size={24} color="black" />
+       </TouchableOpacity>
+      )}
       <TouchableOpacity
         onPress={handleSearchViewOpen}
         style={{ position: 'absolute', bottom: 150, right: 10, backgroundColor: '#5571b5', borderRadius: 20, padding: 10, elevation: 5 }}>
