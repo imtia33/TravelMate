@@ -3,7 +3,7 @@ import { Link, useRouter } from "expo-router";
 import { View, Text, ScrollView, Dimensions, Alert, Image } from "react-native";
 
 import { images } from "../../constants";
-import { createUser, GetLocations } from "../../lib/appwrite";
+import { createUser, getDistricts } from "../../lib/appwrite";
 import { CustomButton, FormField, CustomDropdown } from "../../components";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,11 +13,11 @@ const SignUp = () => {
   const router = useRouter();
   
   useEffect(() => {
-    getLocations();
+    GetDistricts();
   }, []);
   
   const [isSubmitting, setSubmitting] = useState(false);
-  const [locationData, setLocationData] = useState([]);
+  const [locationData, setLocationData] = useState([]);  // represent districts
   const [form, setForm] = useState({
     username: "",
     email: "",
@@ -31,8 +31,8 @@ const SignUp = () => {
     bbox:""
   });
 
-  const getLocations = async () => {
-    const locations = await GetLocations();
+  const GetDistricts = async () => {
+    const locations = await getDistricts();
     setLocationData(locations);
   };
 
@@ -73,11 +73,14 @@ const SignUp = () => {
             minHeight: Dimensions.get("window").height - 100,
           }}
         >
-          <Image
-            source={images.logo}
-            resizeMode="contain"
-            style={{ width: 200, height: 100, alignSelf: 'center', marginBottom: 12 }}
-          />
+          <View
+            style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',left:'10%' }}
+          >
+            
+            <Text style={{ fontFamily: 'MS', fontSize: 106,width: 140,height: 140,bottom:15}}>T</Text>
+            <Text style={{ fontFamily: 'CV', fontSize: 58,width:80,right:50 }}>rav</Text>
+            <Text style={{ fontFamily: 'DS', fontSize: 106,right:70,bottom:15 }}>X</Text>
+          </View>
 
           <FormField
             title="Username"

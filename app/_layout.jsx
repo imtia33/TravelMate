@@ -17,6 +17,9 @@ const RootLayout = () => {
     "Pthin": require("../assets/fonts/Poppins-Thin.ttf"),
     "KolkerBrush-Regular": require("../assets/fonts/KolkerBrush-Regular.ttf"),
     "Ephesis-Regular": require("../assets/fonts/Ephesis-Regular.ttf"),
+    "MS": require("../assets/fonts/MySoul.ttf"),
+    "CV": require("../assets/fonts/Caveat.ttf"),
+    "DS": require("../assets/fonts/DancingScript.ttf"),
   });
 
   useEffect(() => {
@@ -77,7 +80,8 @@ const createDbIfNeeded = async (db) => {
         "Coordinates" TEXT,
         "Coordinates2" TEXT,
         "single" BOOLEAN,
-        "OSM" BOOLEAN
+        "OSM" BOOLEAN,
+        "District" TEXT
       );
       CREATE TABLE IF NOT EXISTS Fare (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

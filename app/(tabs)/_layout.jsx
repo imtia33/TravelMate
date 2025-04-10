@@ -1,13 +1,14 @@
-import React, { useEffect, useRef } from 'react'
-import { View, Text, Pressable, Dimensions } from 'react-native'
+import React from 'react'
+import { View, Pressable, Dimensions } from 'react-native'
 import { Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import * as Animatable from 'react-native-animatable'
 import { StatusBar } from "expo-status-bar";
+
 const { width } = Dimensions.get('window')
 const PADDING = 20
 const TAB_BAR_WIDTH = width - 2 * PADDING
-const TAB_WIDTH = TAB_BAR_WIDTH / 3
+const TAB_WIDTH = TAB_BAR_WIDTH / 2  // Only two tabs now
 
 const TabIcon = ({ icon, color, name, focused }) => {
   return (
@@ -35,10 +36,9 @@ const TabIcon = ({ icon, color, name, focused }) => {
 
 const CustomTabBar = ({ state, descriptors, navigation }) => {
   return (
-    <View style={{  bottom: 0, width: "100%", height: 60, borderTopLeftRadius: 10,borderTopRightRadius:10, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: '#EDEDF0' }}>
+    <View style={{ bottom: 0, width: "100%", height: 60, borderTopLeftRadius: 10, borderTopRightRadius: 10, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: '#EDEDF0' }}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key]
-        const label = options.tabBarLabel ?? options.title ?? route.name
         const isFocused = state.index === index
 
         const onPress = () => {
@@ -83,9 +83,6 @@ export default function TabLayout() {
               case 'route':
                 iconName = focused ? 'map-sharp' : 'map-outline'
                 break
-              case 'profile':
-                iconName = focused ? 'person-circle' : 'person-outline'
-                break
               default:
                 iconName = 'home'
             }
@@ -93,12 +90,11 @@ export default function TabLayout() {
             return <TabIcon icon={iconName} color={color} name={route.name} focused={focused} />
           },
           headerShown: false,
-          lazy:false
+          lazy: false
         })}
       >
         <Tabs.Screen name="home" />
         <Tabs.Screen name="route" />
-        <Tabs.Screen name="profile" />
       </Tabs>
       <StatusBar backgroundColor="" style="dark" />
     </View>

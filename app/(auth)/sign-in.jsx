@@ -145,11 +145,14 @@ const SignIn = () => {
             minHeight: Dimensions.get("window").height - 100,
           }}
         >
-          <Image
-            source={images.logo}
-            resizeMode="contain"
-            style={{ width: 250, height: 160, alignSelf: 'center', marginBottom: 24 }}
-          />
+          <View
+            style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',left:'10%' }}
+          >
+            
+            <Text style={{ fontFamily: 'MS', fontSize: 106,width: 140,height: 140,bottom:15}}>T</Text>
+            <Text style={{ fontFamily: 'CV', fontSize: 58,width:80,right:50 }}>rav</Text>
+            <Text style={{ fontFamily: 'DS', fontSize: 106,right:70,bottom:15 }}>X</Text>
+          </View>
 
           <FormField
             title="Email"

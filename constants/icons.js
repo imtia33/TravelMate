@@ -9,6 +9,7 @@ import eye from "../assets/icons/eye.png"
 import truck from "../assets/icons/truck.png"
 import eyeHide from "../assets/icons/eye-hide.png"
 import mapdir from "../assets/icons/mapdir.png"
+import mapdir2 from "../assets/icons/mapdir2.png"
 import googlemaps from "../assets/icons/google-maps.png"
 import way from "../assets/icons/way.png"
-export default {walk,cng,tempu,rikshaw,bus,eye,eyeHide,mahindra,truck,mapdir,googlemaps,way};
+export default {walk,cng,tempu,rikshaw,bus,eye,eyeHide,mahindra,truck,mapdir,googlemaps,way,mapdir2};

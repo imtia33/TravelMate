@@ -1,35 +1,31 @@
 {
   "expo": {
-    "name": "TravelMate",
-    "slug": "travelmate",
+    "name": "TravX",
+    "slug": "travx",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
+    
     "scheme": [
-      "travelmate"
+      "travx"
     ],
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.travelmate.axi"
+      "bundleIdentifier": "com.travx.axi"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.travelmate.axi",
+      "package": "com.travx.axi",
       "config": {
         "googleMaps": {
-          "apiKey": "Google_Api_key"
+          "apiKey": "AIzaSyDRgXtqI3r5pKMcQx--3GzVMtgFvxIK_po"
         }
       },
       "intentFilters": [
