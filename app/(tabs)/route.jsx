@@ -25,6 +25,8 @@ import MapView, {
   Marker,
   Circle,
   AnimatedRegion,
+  UrlTile,
+  MapUrlTile
 } from "react-native-maps";
 import {
   Ionicons,
@@ -141,8 +143,10 @@ export default function Main() {
     alternativeButtonShow: false,
     mainpath: null,
     locationaccuracy:null,
-    maprotation:false
-  });
+    maprotation:false,
+    UrlTile:true,
+    PlaceFrom:""
+    });
   const locationSubscription = useRef(null);
   const headingSubscription = useRef(null);
 
@@ -348,6 +352,7 @@ export default function Main() {
 
         data.push(res);
         let polylineData = await polylinemaker(doc.path);
+        
         newPolylines.push(polylineData);
       }
       setState((prevState) => ({
@@ -497,6 +502,7 @@ export default function Main() {
       resultsTo: [],
       resultsSearch: [],
       dirLoad: false,
+      PlaceFrom: "",
     }));
   };
   useEffect(() => {
@@ -549,51 +555,64 @@ export default function Main() {
     return R * c; // Distance in kilometers
   };
 
-  const getBestRoutewithSearch = async (From, To, slat, slong, ulat, ulong) => {
+  const getBestRoutewithSearch = async (From, To, slat, slong, ulat = null, ulong = null) => {
     try {
-      console.log(From, To);
       let bestRoute = await findshortestPath(From, To);
       let data = [];
       let newPolylines = [];
+      let roadDistance = [];
+      let placeStart = [];
+      let placeend = [];
+  
       for (const doc of bestRoute) {
-        if (!doc.path) {
-          console.error("Invalid path in bestRoute document:", doc);
-          continue;
-        }
-        state.roadDistance.push(doc.totalDistance);
+        if (!doc.path) continue;
+  
+        roadDistance.push(doc.totalDistance);
+  
         let separate = await fetchAndSeparatePaths(doc.path);
         let merged = await merge(separate);
         let res = await combination(separate, merged, From, To);
         let polylineData = await polylinemaker(doc.path);
-        state.placeStart.push([ulat, ulong]);
-        state.placeStart.push([polylineData[0][1], polylineData[0][0]]);
-        state.placeend.push([
+  
+        if (ulat && ulong) {
+          placeStart.push([ulat, ulong]);
+          placeStart.push([polylineData[0][1], polylineData[0][0]]);
+        }
+  
+        placeend.push([
           polylineData[polylineData.length - 1][1],
           polylineData[polylineData.length - 1][0],
         ]);
-        state.placeend.push([slat, slong]);
+        placeend.push([slat, slong]);
+  
         newPolylines.push(polylineData);
-        const distance = calculateDistance(
-          ulat,
-          ulong,
-          polylineData[0][1],
-          polylineData[0][0]
-        );
-        const n = {
-          From: "Your Location",
-          To: doc.path[0],
-          Vehicle: "Walk",
-          distance: distance,
-          fare: 0,
-          used: false,
-        };
+  
+        let distance, n, n2;
+        if (ulat && ulong) {
+          distance = calculateDistance(
+            ulat,
+            ulong,
+            polylineData[0][1],
+            polylineData[0][0]
+          );
+  
+          n = {
+            From: "Your Location",
+            To: doc.path[0],
+            Vehicle: "Walk",
+            distance: distance,
+            fare: 0,
+            used: false,
+          };
+        }
+  
         const distance2 = calculateDistance(
           polylineData[polylineData.length - 1][1],
           polylineData[polylineData.length - 1][0],
           slat,
           slong
         );
-        let n2;
+  
         if (doc.path[doc.path.length - 1] !== state?.searchText) {
           n2 = {
             From: doc.path[doc.path.length - 1],
@@ -604,37 +623,59 @@ export default function Main() {
             used: false,
           };
         }
+  
         res.forEach((route) => {
-          route.unshift(n);
-          if (n2) {
-            route.push(n2);
-          }
+          if (n) route.unshift(n);
+          if (n2) route.push(n2);
         });
-
+  
         data.push(res);
       }
+  
       setState((prevState) => ({
         ...prevState,
         routeData: data,
         polylines: newPolylines,
         polyliner: newPolylines[0],
+        roadDistance: roadDistance,
+        placeStart: placeStart,
+        placeend: placeend,
         searchText: "",
         SearchLocationCords: [],
         showSearchMarker: false,
-        currentDistance: state.roadDistance[0],
+        currentDistance: roadDistance[0],
         clicked: true,
         showPath: true,
         isSidebarOpen: true,
         isdirectionVisible: false,
         placeSearchOn: true,
       }));
+  
       toggleSidebar();
     } catch (error) {
-      console.error("Error in getBestRoutewithNodes:", error);
+      console.error("Error in getBestRoutewithSearch:", error);
     }
   };
-  const fetchdirectiontosearch = async (lat, long) => {
+  
+  const fetchdirectiontosearch = async (lat, long,From="",SearchButtonClick=false) => {
     setState((prevState) => ({ ...prevState, dirLoad: true }));
+    let currentLocation = null,userPos=null;
+    console.log(From,SearchButtonClick);
+    if(SearchButtonClick&&From===""){
+      
+      return;
+    }
+     const bestFromMatch = await findBestMatch(From, user.District);
+     console.log(bestFromMatch);
+     if(SearchButtonClick&&From&&!bestFromMatch){
+      Toast.show({
+        type: "error",
+        text1: "Error fetching directions.",
+        text2: "See if you have entered a valid location From The Suggestion List",
+      });
+      return;
+     }
+    if(From===""&&!SearchButtonClick){
     const res= await AskForLocationPermission();
     if(res.error !== 103) {
      Toast.show({
@@ -644,7 +685,7 @@ export default function Main() {
      setState((prevState) => ({ ...prevState, dirLoad: false }));
      return;
     }
-    const currentLocation = await Location.getCurrentPositionAsync({});
+     currentLocation = await Location.getCurrentPositionAsync({});
     if (!currentLocation) {
       Toast.show({
         type: "error",
@@ -653,7 +694,7 @@ export default function Main() {
       return;
     }
 
-    const userPos = {
+     userPos = {
       latitude: currentLocation.coords.latitude,
       longitude: currentLocation.coords.longitude,
     };
@@ -661,8 +702,9 @@ export default function Main() {
       setState((prevState) => ({ ...prevState, dirLoad: false }));
       return;
     }
+  }
     const directionTo = await findClosestLocation(lat, long, user.District);
-    const directionFrom = await findClosestLocation(
+    const directionFrom = bestFromMatch ? bestFromMatch : await findClosestLocation(
       userPos.latitude,
       userPos.longitude,
       user.District
@@ -674,20 +716,32 @@ export default function Main() {
       });
       return null;
     }
-    await getBestRoutewithSearch(
-      directionFrom,
-      directionTo,
-      lat,
-      long,
-      userPos.latitude,
-      userPos.longitude
-    );
+    if(SearchButtonClick&&directionFrom){
+      await getBestRoutewithSearch(
+        directionFrom,
+        directionTo,
+        lat,
+        long,
+      );
+    }
+    else{
+      await getBestRoutewithSearch(
+        directionFrom,
+        directionTo,
+        lat,
+        long,
+        userPos.latitude,
+        userPos.longitude
+      );
+    }
+    
     setState((prevState) => ({
       ...prevState,
       isBottomSheetVisible: false,
       searchPlace: [],
       SearchLocationCords: [],
       dirLoad: false,
+      PlaceFrom:""
     }));
   };
   const generateArcPath = (start, end, steps = 50) => {
@@ -774,11 +828,17 @@ export default function Main() {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={{ ...StyleSheet.absoluteFillObject }}
-        mapType={state.mapType}
+        mapType={state.UrlTile?"none":state.mapType}
+        flipY={false}
+        showsTraffic={state.UrlTile?false:true}
         
-        showsTraffic={true}
-        showsBuildings={true}
-        
+        showsBuildings={state.UrlTile?false:true}
+        onMapReady={()=>{
+          setState((prevState) => ({
+            ...prevState,
+            UrlTile:false
+          }))
+        }}
         rotateEnabled={true}
         onLongPress={(e) => {
           getLongPressPlace(
@@ -793,6 +853,13 @@ export default function Main() {
           longitudeDelta: 0.0421,
         }}
       >
+      {state.UrlTile&&(
+        <UrlTile
+          // urlTemplate="http://192.168.0.101:8080/styles/osm-bright/512/{z}/{x}/{y}.png"
+          urlTemplate="https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}@2x.png?key=BV79ypCzUzpvOYri324W"
+          maximumZ={19}
+        />
+      )}
         {state.showPath && state.polyliner && (
           <>
             <Polyline
@@ -899,13 +966,7 @@ export default function Main() {
         
         {state.location && state.track && (
          <>
-         <Marker.Animated
-           coordinate={markerCoordinate}
-           rotation={state.heading }
-           anchor={{ x: 0.5, y: 0.5 }}
-           flat={true}
-           image={icons.mapdir2}
-         />
+         
          <Marker.Animated
            coordinate={markerCoordinate}
            rotation={state.heading }
@@ -919,7 +980,7 @@ export default function Main() {
              longitude: state.location.coords.longitude,
            }}
            radius={state.locationaccuracy}
-           fillColor="rgba(12, 150, 242, 0.5)"
+           fillColor="rgba(50, 141, 202, 0.23)"
            strokeColor="rgba(39, 100, 198, 0.86)"
            strokeWidth={1}
            zIndex={1000}
@@ -982,6 +1043,7 @@ export default function Main() {
           <Ionicons name="search" size={24} color="black" />
         </TouchableOpacity>
       </View>
+      {!state.UrlTile&&(
       <TouchableOpacity
         onPress={handleLayersPress}
         style={{
@@ -996,6 +1058,8 @@ export default function Main() {
       >
         <Ionicons name="layers" size={24} color="#5DB996" />
       </TouchableOpacity>
+      )}
+      
       <View
         style={{
           position: "absolute",
@@ -1398,13 +1462,18 @@ export default function Main() {
       )}
       <Modal animationType="slide" transparent={true} visible={state.dirModal}>
         <PlaceDirection
-          from={state.from}
+          from={state.PlaceFrom}
           setFrom={(value) =>
-            setState((prevState) => ({ ...prevState, from: value }))
+            setState((prevState) => ({ ...prevState, PlaceFrom: value }))
           }
           resultsFrom={state.resultsFrom}
           fetchSuggestionsFrom={fetchSuggestionsFrom}
-          handleSearchPress={handleSearchPress}
+          handleSearchPress={()=>fetchdirectiontosearch(
+            state?.searchPlace.Latitude,
+            state?.searchPlace.Longitude,
+            state?.PlaceFrom,
+            true
+          )}
           setResultsFrom={(value) =>
             setState((prevState) => ({ ...prevState, resultsFrom: value }))
           }

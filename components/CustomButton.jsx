@@ -9,7 +9,7 @@ const CustomButton = ({ title, handlePress, containerStyles, textStyles, isLoadi
       style={[styles.button, containerStyles, isLoading && styles.loading]}
       disabled={isLoading}
     >
-      <Text style={[styles.text, textStyles]}>{title}</Text>
+      <Text style={[styles.text]}>{title}</Text>
 
       {isLoading && (
         <ActivityIndicator
@@ -26,16 +26,26 @@ const CustomButton = ({ title, handlePress, containerStyles, textStyles, isLoadi
 const styles = StyleSheet.create({
   button: {
     backgroundColor: '#d92344',
-    borderRadius: 10,
+    borderBottomWidth: 4,
+    borderTopWidth: 1.8,
+    borderLeftWidth: 1.8,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgb(0, 0, 0)', // black with full opacity
+    borderTopColor: 'rgb(62, 62, 62)', // black with full opacity
+    borderLeftColor: 'rgb(67, 66, 66)', // black with full opacity
+    borderRightColor: 'rgba(0, 0, 0, 1)', // black with full opacity
+    borderRadius: 20, // sharp edges
     minHeight: 62,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    width:180,
+    alignSelf:'center'
   },
   text: {
     color: 'white',
-    fontFamily: 'psemibold',
-    fontSize: 18,
+    fontFamily: 'pbold',
+    fontSize: 20,
   },
   loading: {
     opacity: 0.5,

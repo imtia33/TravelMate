@@ -174,19 +174,21 @@ const styles = StyleSheet.create({
     padding: 12,
     width: 200,
     backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#E1E1E1',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderBottomWidth: 4,
+    borderTopWidth: 1.8,
+    borderLeftWidth: 1.8,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgb(0, 0, 0)', // black with full opacity
+    borderTopColor: 'rgb(100, 100, 100)', // black with full opacity
+    borderLeftColor: 'rgb(100, 100, 100)', // black with full opacity
+    borderRightColor: 'rgba(0, 0, 0, 1)', // black with full opacity
+    borderRadius: 10, // sharp edges
   },
   buttonText: {
     fontSize: 16,
-    color: '#333',
+    color: '#7B7B8B',
     flex: 1,
+    fontFamily: 'pl',
   },
   icon: {
     fontSize: 18,
@@ -220,7 +222,8 @@ const styles = StyleSheet.create({
   },
   itemText: {
     fontSize: 16,
-    color: '#333',
+    color: '#000',
+    fontFamily:'psemibold'
   },
   selectedItem: {
     backgroundColor: '#F0F8FF',

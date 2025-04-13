@@ -90,7 +90,7 @@ const SignUp = () => {
             placeholder="Your Name"
           />
           <View style={{ marginTop: 16, marginBottom: 5, flexDirection: "row", width: '99%', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontSize: 19, marginBottom: 5, color: '#333', fontFamily: 'psemibold', alignSelf: 'center', marginTop: 8 }}>Location:</Text>
+            <Text style={{ fontSize: 19, marginBottom: 5, color: '#000', fontFamily: 'psemibold', alignSelf: 'center', marginTop: 8 }}>Location:</Text>
             <CustomDropdown
               data={locationData}
               value={form.location}

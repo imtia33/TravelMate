@@ -31,17 +31,23 @@ export default function Main() {
           disabled={loading}
           onPress={() => router.replace("/sign-in")}
           style={{
-            backgroundColor: '#FF416C',
-            borderRadius: 10,
-            paddingVertical: 10,
-            paddingHorizontal: 15,
+            backgroundColor: 'rgba(255, 255, 255, 1)', // white with full opacity
+            borderBottomWidth: 3,
+            borderTopWidth: 1.8,
+            borderLeftWidth: 1.8,
+            borderRightWidth: 3,
+            borderBottomColor: 'rgb(23, 22, 22)', // black with full opacity
+            borderTopColor: 'rgb(100, 100, 100)', // black with full opacity
+            borderLeftColor: 'rgb(100, 100, 100)', // black with full opacity
+            borderRightColor: 'rgba(0, 0, 0, 1)', // black with full opacity
+            borderRadius: 10, // sharp edges
+            padding: 12,
+            margin: 10,
             alignItems: 'center',
             justifyContent: 'center',
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.3,
-            shadowRadius: 4,
-            elevation: 6,
+            fontWeight: 'bold',
+            color: 'rgba(255, 0, 127, 1)', // pink with full opacity
+            fontSize: 16,
           }}
         >
           {!loading ? (
