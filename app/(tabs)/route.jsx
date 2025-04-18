@@ -26,7 +26,7 @@ import MapView, {
   Circle,
   AnimatedRegion,
   UrlTile,
-  MapUrlTile
+  MapUrlTile,
 } from "react-native-maps";
 import {
   Ionicons,
@@ -48,11 +48,16 @@ import {
   merge,
   combination,
   polylinemaker,
-  findBestMatch,
-  fetchSuggestions,
+  expandPath,
+  generateArcPath,
   findClosestLocation,
   findshortestPath,
   AskForLocationPermission,
+  calculatePolylineLength,
+  fetchLocationDetails,
+  calcDistance,
+  checkExpandNeeded,
+  fare,
 } from "../../lib/pathfinder";
 import Direction from "../../components/Direction";
 import SearchModal from "../../components/SearchModal";
@@ -62,7 +67,6 @@ import { getPlaceDetails } from "../../lib/appwrite";
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import PlaceDirection from "../../components/PlaceDirection";
 import { icons } from "../../constants";
-
 export default function Main() {
   const { data } = useLocalSearchParams();
   let place = useMemo(() => (data ? JSON.parse(data) : null), [data]);
@@ -108,8 +112,8 @@ export default function Main() {
   const [state, setState] = useState({
     routeData: [],
     selectedRouteIndex: 0,
-    to: "",
-    from: "",
+    to: null,
+    from: null,
     polylines: [],
     isSidebarOpen: false,
     mapType: "standard",
@@ -142,20 +146,214 @@ export default function Main() {
     alternativeTo: "",
     alternativeButtonShow: false,
     mainpath: null,
-    locationaccuracy:null,
-    maprotation:false,
-    UrlTile:true,
-    PlaceFrom:""
-    });
+    locationaccuracy: null,
+    maprotation: false,
+    UrlTile: true,
+    PlaceFrom: "",
+    arc1: null,
+    arc2: null,
+  });
   const locationSubscription = useRef(null);
   const headingSubscription = useRef(null);
 
   const mapRef = useRef(null);
-  
+
   const sidebarAnimation = useRef(new Animated.Value(-width)).current;
 
   const sidebarStyle = {
     transform: [{ translateX: sidebarAnimation }],
+  };
+
+  const getPath = async (From, To) => {
+    setState((prevState) => ({ ...prevState, dirLoad: true }));
+    const Start = await findClosestLocation(From.lat, From.long, user.District);
+    const End = await findClosestLocation(To.lat, To.long, user.District);
+
+    if (!Start || !End) {
+      Toast.show({
+        type: "error",
+        text1: "Error fetching Direction",
+        text2: "Sorry Direction From This point is not Available",
+      });
+      setState((prevState) => ({ ...prevState, dirLoad: false }));
+      return;
+    }
+    let bestRoute = await findshortestPath(Start, End);
+    let data = [];
+    let newPolylines = [];
+    let roadDistance = [];
+    let placeStart = [];
+    let placeEnd = [];
+    for (const doc of bestRoute) {
+      if (!doc.path) continue;
+      let polylineData = await polylinemaker(doc.path);
+      let separate = await fetchAndSeparatePaths(doc.path);
+      const expansionCheckEnd = await checkExpandNeeded(
+        doc.path,
+        {
+          latitude: To.lat,
+          longitude: To.long,
+        },
+        polylineData,
+        false,
+        To.Name
+      );
+      
+      if(expansionCheckEnd.cut){
+        polylineData = polylineData.slice(0, expansionCheckEnd.index + 1);
+        const distanceReduced = doc.totalDistance - expansionCheckEnd.cutLength;
+        doc.totalDistance -= distanceReduced;
+        for (let i = 0; i < separate.length; i++) {
+          if (separate[i].From === doc.path[doc.path.length - 2] && 
+              separate[i].To === doc.path[doc.path.length - 1]) {
+            separate[i].To = expansionCheckEnd.Name;
+            separate[i].distance = separate[i].distance - distanceReduced;
+            separate[i].fare = await fare(separate[i].distance, separate[i]);
+           
+          }
+        }
+      } else {
+        polylineData.push(...expansionCheckEnd.ExtraPolyline);
+        separate.push(...expansionCheckEnd.docs);
+        doc.totalDistance += expansionCheckEnd.length;
+      }
+
+      const expansionCheckFront = await checkExpandNeeded(
+        doc.path,
+        {
+          latitude: From.lat,
+          longitude: From.long,
+        },
+        polylineData,
+        true,
+        From.Name
+      );
+
+      if(expansionCheckFront.cut){
+        polylineData = polylineData.slice(expansionCheckFront.index + 1, polylineData.length);
+        const distanceReduced = doc.totalDistance - expansionCheckFront.cutLength;
+        doc.totalDistance -= distanceReduced;
+        for (let i = 0; i < separate.length; i++) {
+          if (separate[i].From === doc.path[0] && 
+              separate[i].To === doc.path[1]) {
+            separate[i].From = expansionCheckFront.Name;
+            separate[i].distance = separate[i].distance - distanceReduced;
+            separate[i].fare = await fare(separate[i].distance, separate[i]);
+          }
+        }
+      } else {
+        polylineData.unshift(...expansionCheckFront.ExtraPolyline);
+        separate.unshift(...expansionCheckFront.docs);
+        doc.totalDistance += expansionCheckFront.length;
+      }
+      
+      let merged = await merge(separate);
+      const res = await combination(
+        separate,
+        merged,
+        expansionCheckFront.Name ,
+        expansionCheckEnd.Name
+      );
+
+      newPolylines.push(polylineData);
+      const StartInfo = await fetchLocationDetails(Start, user.District);
+
+      const EndInfo = await fetchLocationDetails(End, user.District);
+      const DS = await calcDistance(
+        From.lat,
+        From.long,
+        polylineData[0][1],
+        polylineData[0][0]
+      );
+      const DE = await calcDistance(
+        To.lat,
+        To.long,
+        polylineData[polylineData.length-1][1],
+        polylineData[polylineData.length-1][0]
+      );
+
+      placeStart.push(
+        [From.lat, From.long],
+        [
+          JSON.parse(StartInfo.Coordinates)[0][0],
+          JSON.parse(StartInfo.Coordinates)[0][1],
+        ]
+      );
+      placeEnd.push(
+        [To.lat, To.long],
+        [
+          JSON.parse(EndInfo.Coordinates)[0][0],
+          JSON.parse(EndInfo.Coordinates)[0][1],
+        ]
+      );
+
+      const n1 = {
+        From: From.Name,
+        To: expansionCheckFront.Name,
+        Vehicle: "Walk",
+        distance: DS,
+        fare: 0,
+        used: false,
+      };
+      const n2 = {
+        From: expansionCheckEnd.Name,
+        To: To.Name,
+        Vehicle: "Walk",
+        distance: DE,
+        fare: 0,
+        used: false,
+      };
+      setState((prevState) => ({
+        ...prevState,
+        arc1: n1,
+        arc2: n2,
+      }));
+
+      res.forEach((route) => {
+        if (n1) route.unshift(n1);
+        if (n2) route.push(n2);
+      });
+
+      data.push(res);
+      roadDistance.push(doc.totalDistance + DS + DE);
+    }
+
+    setState((prevState) => ({
+      ...prevState,
+      routeData: data,
+      polylines: newPolylines,
+      polyliner: newPolylines[0],
+      roadDistance: roadDistance,
+      placeStart: placeStart,
+      placeend: placeEnd,
+      searchText: "",
+      SearchLocationCords: [],
+      showSearchMarker: false,
+      currentDistance: roadDistance[0],
+      clicked: true,
+      showPath: true,
+      isSidebarOpen: true,
+      isdirectionVisible: false,
+      placeSearchOn: true,
+      isBottomSheetVisible: false,
+      searchPlace: [],
+      SearchLocationCords: [],
+      dirLoad: false,
+      PlaceFrom: "",
+      alternativeButtonShow:true
+    }));
+
+    toggleSidebar();
+
+    mapRef.current?.animateCamera({
+      center: {
+        latitude: newPolylines[0][0][1],
+        longitude: newPolylines[0][0][0],
+      },
+      zoom: 14,
+      tilt: 0,
+      heading: 0,
+    });
   };
 
   const toggleSidebar = () => {
@@ -180,30 +378,7 @@ export default function Main() {
       polyliner: state.polylines[index],
     }));
   };
-  const handleSearchPress = async () => {
-    if (state.from === "" || state.to === "" || state.from === state.to) {
-      return;
-    }
-    const bestFromMatch = await findBestMatch(state.from, user.District);
 
-    const bestToMatch = await findBestMatch(state.to, user.District);
-
-    if (!bestFromMatch || !bestToMatch) {
-      Toast.show({
-        type: "error",
-        text1: "Error fetching directions.",
-        text2: "See if you have entered a valid location",
-      });
-      return;
-    }
-    await getBestRoutewithNodes(bestFromMatch, bestToMatch);
-    setState((prevState) => ({
-      ...prevState,
-      alternativeButtonShow: true,
-      alternativeFrom: bestFromMatch,
-      alternativeTo: bestToMatch,
-    }));
-  };
   const handleAlternativeCheck = async () => {
     try {
       const alternativePaths = await findTop3DistinctRoutes(
@@ -292,102 +467,6 @@ export default function Main() {
     }));
   };
 
-  const fetchSuggestionsFrom = async (input) => {
-    if (input.trim() === "") {
-      setState((prevState) => ({
-        ...prevState,
-        resultsFrom: [],
-      }));
-      return;
-    }
-    try {
-      const result = await fetchSuggestions(user.District, input);
-      setState((prevState) => ({
-        ...prevState,
-        resultsFrom: result,
-      }));
-    } catch (err) {
-      console.error("Error fetching suggestions:", err);
-    }
-  };
-
-  const fetchSuggestionsTo = async (input) => {
-    if (input.trim() === "") {
-      setState((prevState) => ({
-        ...prevState,
-        resultsTo: [],
-      }));
-      return;
-    }
-
-    try {
-      const result = await fetchSuggestions(user.District, input);
-      setState((prevState) => ({
-        ...prevState,
-        resultsTo: result,
-      }));
-    } catch (err) {
-      console.error("Error fetching suggestions:", err);
-    }
-  };
-
-  const getBestRoutewithNodes = async (From, To) => {
-    try {
-      let bestRoute = await findshortestPath(From, To, user.District);
-
-      let data = [];
-      let newPolylines = [];
-
-      for (const doc of bestRoute) {
-        if (!doc.path) {
-          console.error("Invalid path in bestRoute document:", doc);
-          continue;
-        }
-        state.roadDistance.push(doc.totalDistance);
-        let separate = await fetchAndSeparatePaths(doc.path);
-
-        let merged = await merge(separate);
-
-        let res = await combination(separate, merged, From, To);
-
-        data.push(res);
-        let polylineData = await polylinemaker(doc.path);
-        
-        newPolylines.push(polylineData);
-      }
-      setState((prevState) => ({
-        ...prevState,
-        routeData: data,
-        polylines: newPolylines,
-        polyliner: newPolylines[0],
-        searchText: "",
-        SearchLocationCords: [],
-        showSearchMarker: false,
-        currentDistance: state.roadDistance[0],
-        selectedRouteIndex: 0,
-        clicked: true,
-        showPath: true,
-        isSidebarOpen: true,
-        isdirectionVisible: false,
-        isplaceSearchOn: false,
-        mainpath: bestRoute[0].totalDistance,
-      }));
-      mapRef.current?.animateCamera({
-        center: {
-          latitude: newPolylines[0][0][1],
-          longitude: newPolylines[0][0][0],
-        },
-        zoom: 14,
-        tilt: 0,
-        heading: 0,
-      });
-
-      toggleSidebar();
-    } catch (error) {
-      console.error("Error in getBestRoutewithNodes:", error);
-    }
-  };
-
   const markerCoordinate = useRef(
     new AnimatedRegion({
       latitude: 0, // Default to Dhaka
@@ -396,11 +475,11 @@ export default function Main() {
   ).current;
 
   const startTracking = async () => {
-    let x=0;
+    let x = 0;
     let firstUpdate = true;
     const res = await AskForLocationPermission();
     if (res.error !== 103) {
-      Alert.alert('Error', res.message);
+      Alert.alert("Error", res.message);
       return;
     }
 
@@ -422,12 +501,14 @@ export default function Main() {
           markerCoordinate.setValue({ latitude, longitude });
           firstUpdate = false;
         } else {
-          markerCoordinate.timing({
-            latitude,
-            longitude,
-            duration: 500,
-            useNativeDriver: false, 
-          }).start();
+          markerCoordinate
+            .timing({
+              latitude,
+              longitude,
+              duration: 500,
+              useNativeDriver: false,
+            })
+            .start();
         }
 
         setState((prevState) => ({
@@ -435,31 +516,27 @@ export default function Main() {
           location: newLocation,
           locationaccuracy: accuracy,
         }));
-        if(x===0){
-        mapRef.current?.animateCamera({
-          center: { latitude, longitude },
-          zoom: 19,
-          tilt: 0,
-          heading: state.maprotation ? state.heading : 0,
-        });
-        x++
+        if (x === 0) {
+          mapRef.current?.animateCamera({
+            center: { latitude, longitude },
+            zoom: 19,
+            tilt: 0,
+            heading: state.maprotation ? state.heading : 0,
+          });
+          x++;
         }
-        
       }
     );
 
     headingSubscription.current = await Location.watchHeadingAsync(
       (headingData) => {
-        if (Math.abs(headingData.trueHeading - state.heading) > 15) {
-          setState((prevState) => ({
-            ...prevState,
-            heading: headingData.trueHeading,
-          }));
-        }
+        setState((prevState) => ({
+          ...prevState,
+          heading: headingData.trueHeading,
+        }));
       }
     );
   };
-
 
   const stopTracking = () => {
     if (locationSubscription.current) {
@@ -473,9 +550,8 @@ export default function Main() {
       track: false,
       location: null,
       heading: null,
-      maprotation:false
+      maprotation: false,
     }));
-    
   };
   const closeandclear = () => {
     setState((prevState) => ({
@@ -536,253 +612,7 @@ export default function Main() {
 
     return () => backHandler.remove();
   }, [state.isdirectionVisible, state.isSearchModalVisible]);
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const toRad = (value) => (value * Math.PI) / 180;
-    const R = 6371; // Earth's radius in kilometers
 
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) *
-        Math.cos(toRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in kilometers
-  };
-
-  const getBestRoutewithSearch = async (From, To, slat, slong, ulat = null, ulong = null) => {
-    try {
-      let bestRoute = await findshortestPath(From, To);
-      let data = [];
-      let newPolylines = [];
-      let roadDistance = [];
-      let placeStart = [];
-      let placeend = [];
-  
-      for (const doc of bestRoute) {
-        if (!doc.path) continue;
-  
-        roadDistance.push(doc.totalDistance);
-  
-        let separate = await fetchAndSeparatePaths(doc.path);
-        let merged = await merge(separate);
-        let res = await combination(separate, merged, From, To);
-        let polylineData = await polylinemaker(doc.path);
-  
-        if (ulat && ulong) {
-          placeStart.push([ulat, ulong]);
-          placeStart.push([polylineData[0][1], polylineData[0][0]]);
-        }
-  
-        placeend.push([
-          polylineData[polylineData.length - 1][1],
-          polylineData[polylineData.length - 1][0],
-        ]);
-        placeend.push([slat, slong]);
-  
-        newPolylines.push(polylineData);
-  
-        let distance, n, n2;
-        if (ulat && ulong) {
-          distance = calculateDistance(
-            ulat,
-            ulong,
-            polylineData[0][1],
-            polylineData[0][0]
-          );
-  
-          n = {
-            From: "Your Location",
-            To: doc.path[0],
-            Vehicle: "Walk",
-            distance: distance,
-            fare: 0,
-            used: false,
-          };
-        }
-  
-        const distance2 = calculateDistance(
-          polylineData[polylineData.length - 1][1],
-          polylineData[polylineData.length - 1][0],
-          slat,
-          slong
-        );
-  
-        if (doc.path[doc.path.length - 1] !== state?.searchText) {
-          n2 = {
-            From: doc.path[doc.path.length - 1],
-            To: state?.searchText,
-            Vehicle: "Walk",
-            distance: distance2,
-            fare: 0,
-            used: false,
-          };
-        }
-  
-        res.forEach((route) => {
-          if (n) route.unshift(n);
-          if (n2) route.push(n2);
-        });
-  
-        data.push(res);
-      }
-  
-      setState((prevState) => ({
-        ...prevState,
-        routeData: data,
-        polylines: newPolylines,
-        polyliner: newPolylines[0],
-        roadDistance: roadDistance,
-        placeStart: placeStart,
-        placeend: placeend,
-        searchText: "",
-        SearchLocationCords: [],
-        showSearchMarker: false,
-        currentDistance: roadDistance[0],
-        clicked: true,
-        showPath: true,
-        isSidebarOpen: true,
-        isdirectionVisible: false,
-        placeSearchOn: true,
-      }));
-  
-      toggleSidebar();
-    } catch (error) {
-      console.error("Error in getBestRoutewithSearch:", error);
-    }
-  };
-  
-  const fetchdirectiontosearch = async (lat, long,From="",SearchButtonClick=false) => {
-    setState((prevState) => ({ ...prevState, dirLoad: true }));
-    let currentLocation = null,userPos=null;
-    console.log(From,SearchButtonClick);
-    if(SearchButtonClick&&From===""){
-      
-      return;
-    }
-     const bestFromMatch = await findBestMatch(From, user.District);
-     console.log(bestFromMatch);
-     if(SearchButtonClick&&From&&!bestFromMatch){
-      Toast.show({
-        type: "error",
-        text1: "Error fetching directions.",
-        text2: "See if you have entered a valid location From The Suggestion List",
-      });
-      return;
-     }
-    if(From===""&&!SearchButtonClick){
-    const res= await AskForLocationPermission();
-    if(res.error !== 103) {
-     Toast.show({
-       type: "error",
-       text1: res.message,
-     });
-     setState((prevState) => ({ ...prevState, dirLoad: false }));
-     return;
-    }
-     currentLocation = await Location.getCurrentPositionAsync({});
-    if (!currentLocation) {
-      Toast.show({
-        type: "error",
-        text1: "Please Turn on your Location",
-      });
-      return;
-    }
-
-     userPos = {
-      latitude: currentLocation.coords.latitude,
-      longitude: currentLocation.coords.longitude,
-    };
-    if (!userPos) {
-      setState((prevState) => ({ ...prevState, dirLoad: false }));
-      return;
-    }
-  }
-    const directionTo = await findClosestLocation(lat, long, user.District);
-    const directionFrom = bestFromMatch ? bestFromMatch : await findClosestLocation(
-      userPos.latitude,
-      userPos.longitude,
-      user.District
-    );
-    if (!directionFrom || !directionTo) {
-      Toast.show({
-        type: "error",
-        text1: "Error fetching directions",
-      });
-      return null;
-    }
-    if(SearchButtonClick&&directionFrom){
-      await getBestRoutewithSearch(
-        directionFrom,
-        directionTo,
-        lat,
-        long,
-      );
-    }
-    else{
-      await getBestRoutewithSearch(
-        directionFrom,
-        directionTo,
-        lat,
-        long,
-        userPos.latitude,
-        userPos.longitude
-      );
-    }
-    
-    setState((prevState) => ({
-      ...prevState,
-      isBottomSheetVisible: false,
-      searchPlace: [],
-      SearchLocationCords: [],
-      dirLoad: false,
-      PlaceFrom:""
-    }));
-  };
-  const generateArcPath = (start, end, steps = 50) => {
-    if (
-      !Array.isArray(start) ||
-      !Array.isArray(end) ||
-      start.length < 2 ||
-      end.length < 2
-    ) {
-      console.warn("Invalid coordinates:", start, end);
-      return [];
-    }
-
-    const [lat1, lon1] = start;
-    const [lat2, lon2] = end;
-
-    // Calculate distance (approximate)
-    const distance = Math.sqrt((lat2 - lat1) ** 2 + (lon2 - lon1) ** 2);
-
-    // Dynamically adjust arc height & steps
-    const arcHeight = Math.min(distance * 0.3, 0.002); // Max height of 0.002 degrees
-    const dynamicSteps = Math.max(Math.floor(distance * 5000), 20); // More points for long distances
-
-    let curvePoints = [];
-
-    for (let i = 0; i <= dynamicSteps; i++) {
-      const t = i / dynamicSteps;
-      const lat = (1 - t) * lat1 + t * lat2;
-      const lon = (1 - t) * lon1 + t * lon2;
-
-      // Arc effect (adjusted for short distances)
-      const arcOffset = Math.sin(t * Math.PI) * arcHeight;
-      curvePoints.push([lat + arcOffset, lon]);
-    }
-
-    // Convert `[lat, lon]` to `{ latitude, longitude }`
-    return curvePoints.map(([latitude, longitude]) => ({
-      latitude,
-      longitude,
-    }));
-  };
   const getLongPressPlace = async (lat, long) => {
     setState((prevState) => ({
       ...prevState,
@@ -828,18 +658,16 @@ export default function Main() {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={{ ...StyleSheet.absoluteFillObject }}
-        mapType={state.UrlTile?"none":state.mapType}
+        mapType={state.UrlTile ? "none" : state.mapType}
         flipY={false}
-        showsTraffic={state.UrlTile?false:true}
-        
-        showsBuildings={state.UrlTile?false:true}
-        onMapReady={()=>{
+        showsTraffic={state.UrlTile ? false : true}
+        showsBuildings={state.UrlTile ? false : true}
+        onMapReady={() => {
           setState((prevState) => ({
             ...prevState,
-            UrlTile:false
-          }))
+            UrlTile: false,
+          }));
         }}
-        rotateEnabled={true}
         onLongPress={(e) => {
           getLongPressPlace(
             e.nativeEvent.coordinate.latitude,
@@ -853,13 +681,12 @@ export default function Main() {
           longitudeDelta: 0.0421,
         }}
       >
-      {state.UrlTile&&(
-        <UrlTile
-          // urlTemplate="http://192.168.0.101:8080/styles/osm-bright/512/{z}/{x}/{y}.png"
-          urlTemplate="https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}@2x.png?key=BV79ypCzUzpvOYri324W"
-          maximumZ={19}
-        />
-      )}
+        {state.UrlTile && (
+          <UrlTile
+            urlTemplate="https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}@2x.png?key=BV79ypCzUzpvOYri324W"
+            maximumZ={19}
+          />
+        )}
         {state.showPath && state.polyliner && (
           <>
             <Polyline
@@ -884,10 +711,10 @@ export default function Main() {
         {state.placeSearchOn && (
           <>
             <Polyline
-              coordinates={generateArcPath(
-                state.placeStart[0],
-                state.placeStart[state.placeStart.length - 1]
-              )}
+              coordinates={generateArcPath(state.placeStart[0], [
+                state.polyliner[0][1],
+                state.polyliner[0][0],
+              ])}
               strokeColor={
                 state.mapType === "hybrid" ? "#0000FF" : "rgb(104, 107, 107)"
               }
@@ -907,10 +734,10 @@ export default function Main() {
               }}
             />
             <Polyline
-              coordinates={generateArcPath(
-                state.placeend[0],
-                state.placeend[state.placeend.length - 1]
-              )}
+              coordinates={generateArcPath(state.placeend[0], [
+                state.polyliner[state.polyliner.length - 1][1],
+                state.polyliner[state.polyliner.length - 1][0],
+              ])}
               strokeColor={
                 state.mapType === "hybrid" ? "#0000FF" : "rgb(99, 101, 101)"
               }
@@ -930,26 +757,24 @@ export default function Main() {
             />
           </>
         )}
-        {state.showPath &&
-          state.polyliner.length > 0 &&
-          !state.placeSearchOn && (
-            <Marker
-              coordinate={{
-                latitude: state.polyliner[state.polyliner.length - 1][1],
-                longitude: state.polyliner[state.polyliner.length - 1][0],
-              }}
-              title={state.to}
-            />
-          )}
+
         {state.showPath &&
           state.polyliner.length > 0 &&
           state.placeSearchOn && (
             <Marker
               coordinate={{
-                latitude: state.placeend[state.placeend.length - 1][0],
-                longitude: state.placeend[state.placeend.length - 1][1],
+                latitude: state.placeend[0][0],
+                longitude: state.placeend[0][1],
               }}
-              title={state.to}
+              title={state.to.Name}
+              draggable={true}
+              onDragEnd={(e) => {
+                const { latitude, longitude } = e.nativeEvent.coordinate;
+                setState((prevState) => ({
+                  ...prevState,
+                  placeend: [[latitude, longitude]],
+                }));
+              }}
             />
           )}
         {!state.showPath &&
@@ -963,29 +788,29 @@ export default function Main() {
               title={state.searchText}
             />
           )}
-        
+
         {state.location && state.track && (
-         <>
-         
-         <Marker.Animated
-           coordinate={markerCoordinate}
-           rotation={state.heading }
-           anchor={{ x: 0.5, y: 0.5 }}
-           flat={true}
-           image={icons.mapdir}
-         />
-         <Circle
-           center={{
-             latitude: state.location.coords.latitude,
-             longitude: state.location.coords.longitude,
-           }}
-           radius={state.locationaccuracy}
-           fillColor="rgba(50, 141, 202, 0.23)"
-           strokeColor="rgba(39, 100, 198, 0.86)"
-           strokeWidth={1}
-           zIndex={1000}
-         />
-       </>
+          <>
+            <Marker.Animated
+              coordinate={markerCoordinate}
+              rotation={state.heading}
+              anchor={{ x: 0.5, y: 0.5 }}
+              flat={true}
+              image={icons.mapdir}
+            />
+
+            <Circle
+              center={{
+                latitude: state.location.coords.latitude,
+                longitude: state.location.coords.longitude,
+              }}
+              radius={state.locationaccuracy}
+              fillColor="rgba(50, 141, 202, 0.23)"
+              strokeColor="rgba(39, 100, 198, 0.86)"
+              strokeWidth={1}
+              zIndex={1000}
+            />
+          </>
         )}
       </MapView>
 
@@ -1028,7 +853,16 @@ export default function Main() {
           {state.searchText.length > 0 ? (
             <Text style={{ color: "#000" }}>{state.searchText}</Text>
           ) : (
-            <Text style={{ color: "#000" }}>Search here</Text>
+            <Text
+              style={{
+                color: "rgba(2, 1, 1, 0.49)",
+                fontFamily: "pm",
+                fontSize: 20,
+                top: 2,
+              }}
+            >
+              Search here
+            </Text>
           )}
         </TouchableOpacity>
         <TouchableOpacity
@@ -1040,30 +874,30 @@ export default function Main() {
           }}
           style={{ padding: 5 }}
         >
-          <Ionicons name="search" size={24} color="black" />
+          <Ionicons name="search" size={30} color="rgba(10, 9, 9, 0.73)" />
         </TouchableOpacity>
       </View>
-      {!state.UrlTile&&(
-      <TouchableOpacity
-        onPress={handleLayersPress}
-        style={{
-          position: "absolute",
-          top: 100,
-          right: 10,
-          backgroundColor: "white",
-          borderRadius: 20,
-          padding: 10,
-          elevation: 5,
-        }}
-      >
-        <Ionicons name="layers" size={24} color="#5DB996" />
-      </TouchableOpacity>
+      {!state.UrlTile && (
+        <TouchableOpacity
+          onPress={handleLayersPress}
+          style={{
+            position: "absolute",
+            top: 100,
+            right: 10,
+            backgroundColor: "white",
+            borderRadius: 20,
+            padding: 10,
+            elevation: 5,
+          }}
+        >
+          <Ionicons name="layers" size={34} color="#5DB996" />
+        </TouchableOpacity>
       )}
-      
+
       <View
         style={{
           position: "absolute",
-          top: 150,
+          top: 160,
           right: 10,
           flexDirection: "column",
           alignItems: "center",
@@ -1097,16 +931,38 @@ export default function Main() {
           </TouchableOpacity>
         ))}
       </View>
-       {!state.track&&(
-      <TouchableOpacity onPress={startTracking} style={{ position: 'absolute', bottom: 100, right: 10, backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5 }}>
-      <Ionicons name="locate" size={24} color="black" />
-      </TouchableOpacity>
-     )}
-       {state.track&&(
-      <TouchableOpacity onPress={stopTracking} style={{ position: 'absolute', bottom: 100, right: 10, backgroundColor: 'white', borderRadius: 20, padding: 10, elevation: 5 }}>
-      <Ionicons name="locate" size={24} color="green" />
-      </TouchableOpacity>
-     )}
+      {!state.track && (
+        <TouchableOpacity
+          onPress={startTracking}
+          style={{
+            position: "absolute",
+            bottom: 100,
+            right: 10,
+            backgroundColor: "white",
+            borderRadius: 20,
+            padding: 10,
+            elevation: 5,
+          }}
+        >
+          <Ionicons name="locate" size={34} color="rgb(0, 0, 0)" />
+        </TouchableOpacity>
+      )}
+      {state.track && (
+        <TouchableOpacity
+          onPress={stopTracking}
+          style={{
+            position: "absolute",
+            bottom: 100,
+            right: 10,
+            backgroundColor: "white",
+            borderRadius: 20,
+            padding: 10,
+            elevation: 5,
+          }}
+        >
+          <Ionicons name="locate" size={34} color="rgb(10, 171, 179)" />
+        </TouchableOpacity>
+      )}
       {state.routeData.length > 0 && (
         <TouchableOpacity
           onPress={() =>
@@ -1132,7 +988,7 @@ export default function Main() {
           }
           style={{
             position: "absolute",
-            bottom: 50,
+            bottom: 40,
             right: 10,
             backgroundColor: "white",
             borderRadius: 20,
@@ -1140,7 +996,7 @@ export default function Main() {
             elevation: 5,
           }}
         >
-          <Ionicons name="close-sharp" size={24} color="black" />
+          <Ionicons name="close-sharp" size={34} color="black" />
         </TouchableOpacity>
       )}
       {state.alternativeButtonShow && (
@@ -1148,7 +1004,7 @@ export default function Main() {
           onPress={handleAlternativeCheck}
           style={{
             position: "absolute",
-            bottom: 200,
+            bottom: 220,
             right: 10,
             backgroundColor: "#5571b5",
             borderRadius: 20,
@@ -1156,14 +1012,14 @@ export default function Main() {
             elevation: 5,
           }}
         >
-          <Feather name="git-pull-request" size={24} color="black" />
+          <Feather name="git-pull-request" size={34} color="black" />
         </TouchableOpacity>
       )}
       <TouchableOpacity
         onPress={handleSearchViewOpen}
         style={{
           position: "absolute",
-          bottom: 150,
+          bottom: 160,
           right: 10,
           backgroundColor: "#5571b5",
           borderRadius: 20,
@@ -1171,7 +1027,7 @@ export default function Main() {
           elevation: 5,
         }}
       >
-        <MaterialIcons name="directions" size={24} color="white" />
+        <MaterialIcons name="directions" size={34} color="white" />
       </TouchableOpacity>
 
       <Animated.View
@@ -1217,37 +1073,27 @@ export default function Main() {
         <>
           <Direction
             from={state.from}
+            to={state.to}
             setFrom={(value) =>
               setState((prevState) => ({ ...prevState, from: value }))
             }
-            to={state.to}
             setTo={(value) =>
               setState((prevState) => ({ ...prevState, to: value }))
             }
-            resultsFrom={state.resultsFrom}
-            resultsTo={state.resultsTo}
-            fetchSuggestionsFrom={fetchSuggestionsFrom}
-            fetchSuggestionsTo={fetchSuggestionsTo}
-            handleSearchPress={handleSearchPress}
-            setResultsFrom={(value) =>
-              setState((prevState) => ({ ...prevState, resultsFrom: value }))
-            }
-            setResultsTo={(value) =>
-              setState((prevState) => ({ ...prevState, resultsTo: value }))
-            }
-            setSearchLocationCords={(value) =>
-              setState((prevState) => ({
-                ...prevState,
-                SearchLocationCords: value,
-              }))
-            }
-            mapRef={mapRef}
             onClose={() =>
               setState((prevState) => ({
                 ...prevState,
                 isdirectionVisible: false,
               }))
             }
+            bbox={user.bbox}
+            OnSearchPress={() => {
+              setState((prevState) => ({
+                ...prevState,
+                isdirectionVisible: false,
+              }));
+              getPath(state.from, state.to);
+            }}
           />
         </>
       )}
@@ -1349,7 +1195,15 @@ export default function Main() {
               <TouchableOpacity
                 disabled={state.dirLoad}
                 onPress={() => {
-                  setState((prevState) => ({ ...prevState, dirModal: true }));
+                  setState((prevState) => ({
+                    ...prevState,
+                    isdirectionVisible: true,
+                    to: {
+                      Name: state.searchPlace.Name,
+                      lat: state.searchPlace.Latitude,
+                      long: state.searchPlace.Longitude,
+                    },
+                  }));
                 }}
                 style={{
                   backgroundColor: "rgb(15, 169, 135)",
@@ -1369,11 +1223,52 @@ export default function Main() {
               </TouchableOpacity>
               <TouchableOpacity
                 disabled={state.dirLoad}
-                onPress={() => {
-                  fetchdirectiontosearch(
-                    state?.searchPlace.Latitude,
-                    state?.searchPlace.Longitude
+                onPress={async () => {
+                  const res = await AskForLocationPermission();
+                  if (res.error !== 103) {
+                    Toast.show({
+                      type: "error",
+                      text1: res.message,
+                    });
+                    setState((prevState) => ({ ...prevState, dirLoad: false }));
+                    return;
+                  }
+                  let currentLocation = await Location.getCurrentPositionAsync(
+                    {}
                   );
+                  if (!currentLocation) {
+                    Toast.show({
+                      type: "error",
+                      text1: "Please Turn on your Location",
+                    });
+                    return;
+                  }
+
+                  getPath(
+                    {
+                      Name: "Your Location",
+                      lat: currentLocation?.coords.latitude,
+                      long: currentLocation?.coords.longitude,
+                    },
+                    {
+                      Name: state.searchPlace.Name,
+                      lat: state.searchPlace.Latitude,
+                      long: state.searchPlace.Longitude,
+                    }
+                  );
+                  setState((p) => ({
+                    ...p,
+                    from: {
+                      Name: "Your Location",
+                      lat: currentLocation?.coords.latitude,
+                      long: currentLocation?.coords.longitude,
+                    },
+                    to: {
+                      Name: state.searchPlace.Name,
+                      lat: state.searchPlace.Latitude,
+                      long: state.searchPlace.Longitude,
+                    },
+                  }));
                 }}
                 style={{
                   backgroundColor: "rgb(15, 169, 135)",
@@ -1460,35 +1355,6 @@ export default function Main() {
           </ScrollView>
         </BottomSheet>
       )}
-      <Modal animationType="slide" transparent={true} visible={state.dirModal}>
-        <PlaceDirection
-          from={state.PlaceFrom}
-          setFrom={(value) =>
-            setState((prevState) => ({ ...prevState, PlaceFrom: value }))
-          }
-          resultsFrom={state.resultsFrom}
-          fetchSuggestionsFrom={fetchSuggestionsFrom}
-          handleSearchPress={()=>fetchdirectiontosearch(
-            state?.searchPlace.Latitude,
-            state?.searchPlace.Longitude,
-            state?.PlaceFrom,
-            true
-          )}
-          setResultsFrom={(value) =>
-            setState((prevState) => ({ ...prevState, resultsFrom: value }))
-          }
-          setSearchLocationCords={(value) =>
-            setState((prevState) => ({
-              ...prevState,
-              SearchLocationCords: value,
-            }))
-          }
-          mapRef={mapRef}
-          onClose={() =>
-            setState((prevState) => ({ ...prevState, dirModal: false }))
-          }
-        />
-      </Modal>
       <Toast />
     </View>
   );

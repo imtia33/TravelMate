@@ -1,303 +1,258 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  TextInput, 
-  TouchableOpacity, 
-  FlatList, 
-  Text, 
-  Keyboard, 
-  StyleSheet, 
-  BackHandler 
-} from 'react-native';
-import { Ionicons, FontAwesome, Entypo, MaterialIcons } from '@expo/vector-icons';
+import { useState, useEffect, useCallback } from "react"
+import { View, TextInput, TouchableOpacity, FlatList, Text, StyleSheet, Animated, Keyboard, BackHandler, ActivityIndicator } from "react-native"
+import { Ionicons } from "@expo/vector-icons"
+import { fetchPhotonResults } from "../lib/pathfinder"
 
-const PlaceDirection = ({
-  from,
+const PickPlace = ({
+  currentFocus,
   setFrom,
-  resultsFrom,
-  fetchSuggestionsFrom,
-  handleSearchPress,
-  setShowSearchLocation,
-  setResultsFrom,
-  mapRef,
+  setFromText,
+  setTo,
+  setToText,
   onClose,
-  
+  bbox,
+  setsearchModal,
+  focusText,
+  setFcousText,
 }) => {
-  const [focusedField, setFocusedField] = useState(null);
+  const [showMainSearch, setShowMainSearch] = useState(false)
+  const [animation] = useState(new Animated.Value(0))
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [cache, setCache] = useState(new Map())
+  const [lastFetchTime, setLastFetchTime] = useState(0)
+  const [error, setError] = useState(null)
+  const [searchText, setSearchText] = useState("")
 
-  // Handle Android back button
+  const throttleDelay = 1000
+  const debounceTimeout = 300
+
   useEffect(() => {
-    const backAction = () => {
-      if (focusedField) {
-        // If a field is focused, unfocus it and clear results
-        setFocusedField(null);
-        Keyboard.dismiss();
-        setResultsFrom([]);
-        return true; // Prevent default back action
-      }
-      return false; // Let default back action happen
-    };
+    Animated.timing(animation, {
+      toValue: 1,
+      duration: 100,
+      useNativeDriver: true,
+    }).start()
 
-    const backHandler = BackHandler.addEventListener(
-      'hardwareBackPress',
-      backAction
-    );
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleClose();
+      return true;
+    });
 
-    return () => backHandler.remove();
-  }, [focusedField, setResultsFrom]);
-
-  const handleFocus = (field) => {
-    setFocusedField(field);
-    if (field === 'from' && from.trim() !== '') {
-      fetchSuggestionsFrom(from);
+    return () => {
+      backHandler.remove();
+      Animated.timing(animation, {
+        toValue: 0,
+        duration: 100,
+        useNativeDriver: true,
+      }).start()
     }
-  };
+  }, [animation])
 
-  const handleClear = () => {
-    setFrom('');
-    setResultsFrom([]);
-  };
+  const handleSearch = useCallback(() => {
+    const currentTime = Date.now();
+    if (currentTime - lastFetchTime < throttleDelay) {
+      return;
+    }
+    setLastFetchTime(currentTime);
 
-  const handleOutsidePress = () => {
-    setFocusedField(null);
-    setResultsFrom([]);
-    Keyboard.dismiss();
-  };
+    fetchPhotonResults(focusText, setResults, setLoading, cache, setCache,bbox)
+      .catch((err) => {
+        setError('Something went wrong. Please try again.');
+        setLoading(false);
+      });
+  }, [focusText, cache, lastFetchTime]);
 
-  // Show suggestions only if there's text and the field is focused
-  const showFromSuggestions = focusedField === 'from' && 
-    from.trim() !== '' && 
-    resultsFrom.length > 0 && 
-    !(resultsFrom.length === 1 && from === resultsFrom[0].Name);
+  useEffect(() => {
+    if (!focusText) {
+      setResults([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      handleSearch();
+    }, debounceTimeout);
+
+    return () => clearTimeout(timeoutId);
+  }, [focusText, handleSearch]);
+
+  const handleResultSelect = async(item) => {
+     if(currentFocus === "from") {
+      setFrom({
+        Name: item.Name,
+        lat: item.Latitude,
+        long: item.Longitude,
+      })
+      setFromText(item.Name)
+      setsearchModal(false)
+    }
+    else{
+      setTo({
+        Name: item.Name,
+        lat: item.Latitude,
+        long: item.Longitude,
+      })
+      setToText(item.Name)
+      setsearchModal(false)
+    }
+    
+    // setSearchLocationCords([item.Latitude, item.Longitude])
+    
+    handleClose()
+  }
+
+  const handleClose = () => {
+    // Keyboard.dismiss()
+    Animated.timing(animation, {
+      toValue: 0,
+      duration: 100,
+      useNativeDriver: true,
+    }).start(onClose)
+  }
+
+  const slideUp = animation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [600, 0],
+  })
 
   return (
-    <TouchableOpacity 
-      activeOpacity={1} 
-      style={styles.container} 
-      onPress={handleOutsidePress}
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: animation,
+          transform: [{ translateY: slideUp }],
+        },
+      ]}
     >
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onClose}>
-          <Ionicons name="arrow-back" size={24} color="#212121" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>PlaceDirections</Text>
-      </View>
-
       <View style={styles.content}>
-        <View style={styles.PlacedirectionContainer}>
-          {/* <View style={styles.iconColumn}>
-            <FontAwesome 
-              name={from.length > 0 ? "dot-circle-o" : "circle-o"} 
-              size={17} 
-              color={from.length > 0 ? "#1f9cbf" : "#212121"} 
-            />
-            <View style={styles.dotConnector}>
-              <Entypo name="dots-three-vertical" size={16} color="#9E9E9E" />
-            </View>
-            <MaterialIcons name="my-location" size={19} color="#E53935" />
-          </View> */}
-          
-          <View style={styles.inputsColumn}>
-            {/* From input */}
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Starting location"
-                placeholderTextColor="#5F6368"
-                value={from}
-                onFocus={() => handleFocus('from')}
-                onChangeText={(text) => {
-                  setFrom(text);
-                  if (text.trim() === '') {
-                    setResultsFrom([]);
-                  } else {
-                    fetchSuggestionsFrom(text);
-                  }
-                }}
-              />
-              {from.length > 0 && (
-                <TouchableOpacity onPress={handleClear} style={styles.clearButton}>
-                  <Ionicons name="close-circle" size={20} color="#9E9E9E" />
-                </TouchableOpacity>
-              )}
-            </View>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color="#5F6368" style={styles.searchIcon} />
+          <TextInput
             
-            {/* Search button positioned below inputs */}
+            style={styles.input}
+            placeholder="Search here"
+            placeholderTextColor="#5F6368"
+            value={focusText}
+            onChangeText={(text) => {
+              setShowMainSearch(true)
+              setFcousText(text)
+            }}
+          />
+          {focusText.length > 0 && (
             <TouchableOpacity
-              style={styles.searchButton}
-              onPress={async () => {
-                await handleSearchPress();
-                if (from && from.Coordinates) {
-                  const location = JSON.parse(from.Coordinates)[0];
-                  setShowSearchLocation(location);
-                  mapRef.current?.animateCamera({
-                    center: {
-                      latitude: location[0],
-                      longitude: location[1],
-                    },
-                    pitch: 0,
-                    heading: 0,
-                    zoom: 15,
-                  }, { duration: 500 });
+              onPress={() => {
+                setFcousText("")
+                setShowMainSearch(false)
+                if(currentFocus === "from") {
+                  setFrom(null)
+                  setFromText("")
+                  setsearchModal(false)
                 }
+                else{
+                  setTo(null)
+                  setToText("")
+                  setsearchModal(false)
+                }
+                
               }}
+              style={styles.clearButton}
             >
-              <Ionicons  name="search" size={30} color="white" style={styles.searchIcon} />
+              <Ionicons name="close-circle" size={20} color="#5F6368" />
             </TouchableOpacity>
-          </View>
+          )}
         </View>
-        
-        {/* From suggestions overlay */}
-        {showFromSuggestions && (
-          <View style={{
-            
-            
-          }}>
-            <FlatList
-              data={resultsFrom}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item, index }) => (
-                <TouchableOpacity
-                  onPress={() => {
-                    setFrom(item.Name);
-                    setResultsFrom([]);
-                    setFocusedField(null);
-                    Keyboard.dismiss();
-                  }}
-                  style={{
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                    borderBottomWidth: index < resultsFrom.length - 1 ? 1 : 0,
-                    borderBottomColor: index < resultsFrom.length - 1 ? '#000' : 'transparent',
-                  }}
-                >
-                  <Text style={styles.suggestionText}>{item.Name}</Text>
-                </TouchableOpacity>
-              )}
-              style={styles.suggestionsList}
-              nestedScrollEnabled
-            />
-          </View>
+        {loading && <ActivityIndicator size="small" color="#0000ff" />}
+        {error && <Text style={{ color: 'red', marginBottom: 10 }}>{error}</Text>}
+        {results.length > 0 && showMainSearch && (
+          <FlatList
+            data={results}
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={({ item }) => (
+              <TouchableOpacity onPress={() => handleResultSelect(item)} style={styles.resultItem}>
+                <Ionicons name="location" size={20} color="#4285F4" style={styles.locationIcon} />
+                <View>
+                  <Text style={styles.resultName}>{item.Name}</Text>
+                  <Text style={styles.resultAddress}>{item.District}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            style={styles.resultsList}
+            contentContainerStyle={styles.resultsContent}
+          />
         )}
       </View>
-    </TouchableOpacity>
-  );
-};
+    </Animated.View>
+  )
+}
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#FFFFFF',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 50,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 16,
-    color: '#212121',
+    backgroundColor: "rgb(255, 255, 255)",
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 24,
-  },
-  PlacedirectionContainer: {
-    flexDirection: 'row',
-    marginBottom: 24,
-  },
-  iconColumn: {
-    width: 24,
-    alignItems: 'center',
-    marginRight: 12,
-    paddingTop: 12,
-    zIndex: 1,
-  },
-  dotConnector: {
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  inputsColumn: {
-    flex: 1,
-    gap: 16,
-    zIndex: 1,
-  },
-  inputContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    position: 'relative',
-  },
-  input: {
-    fontSize: 16,
-    color: '#212121',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    paddingRight: 40,
-  },
-  clearButton: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    zIndex: 1,
-  },
-  suggestionsList: {
-    maxHeight: 400,
-  },
-  suggestionItem: {
-    paddingVertical: 12,
+    paddingTop: 50,
     paddingHorizontal: 16,
   },
-  suggestionText: {
-    fontSize: 16,
-    color: '#212121',
-  },
-  searchButton: {
-    marginTop: 0,
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F3F4",
+    borderRadius: 30,
+    paddingHorizontal: 16,
     height: 50,
-    borderTopRightRadius: 40,
-    borderTopLeftRadius: 40,
-    borderBottomLeftRadius: 40,
-    backgroundColor: '#4285F4',
-    alignItems: 'center',
-    justifyContent: 'center',
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    flexDirection: 'row',
-    width: 50,
-    alignSelf: 'flex-end'
+    marginBottom: 16,
   },
   searchIcon: {
     marginRight: 8,
-    left: 2
   },
-  searchText: {
-    color: 'white',
+  input: {
+    flex: 1,
     fontSize: 16,
-    fontWeight: '500',
+    color: "#212121",
   },
-});
+  clearButton: {
+    padding: 4,
+  },
+  resultsList: {
+    flex: 1,
+  },
+  resultsContent: {
+    paddingBottom: 16,
+  },
+  resultItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E0E0E0",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    marginVertical: 4,
+    marginHorizontal: 8,
+    elevation: 1,
+  },
+  locationIcon: {
+    marginRight: 12,
+  },
+  resultName: {
+    fontSize: 16,
+    color: "#212121",
+    fontWeight: "500",
+  },
+  resultAddress: {
+    fontSize: 14,
+    color: "#5F6368",
+    marginTop: 2,
+  },
+})
 
-export default PlaceDirection;
+export default PickPlace
