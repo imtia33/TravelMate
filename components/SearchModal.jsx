@@ -1,6 +1,19 @@
-import { useState, useEffect, useCallback } from "react"
-import { View, TextInput, TouchableOpacity, FlatList, Text, StyleSheet, Animated, Keyboard, BackHandler, ActivityIndicator } from "react-native"
-import { Ionicons } from "@expo/vector-icons"
+
+import { useState, useEffect, useCallback, useRef } from "react"
+import {
+  View,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  Text,
+  StyleSheet,
+  Animated,
+  Keyboard,
+  BackHandler,
+  ActivityIndicator,
+  StatusBar,
+} from "react-native"
+import { Ionicons, MaterialIcons } from "@expo/vector-icons"
 import { fetchPhotonResults } from "../lib/pathfinder"
 
 const SearchModal = ({
@@ -11,105 +24,235 @@ const SearchModal = ({
   mapRef,
   setsearchPlace,
   onClose,
-  bbox
+  bbox,
 }) => {
-  const [showMainSearch, setShowMainSearch] = useState(false)
   const [animation] = useState(new Animated.Value(0))
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [cache, setCache] = useState(new Map())
   const [lastFetchTime, setLastFetchTime] = useState(0)
   const [error, setError] = useState(null)
+  const [recentSearches, setRecentSearches] = useState([])
 
+  // Ref to track if component is mounted
+  const isMounted = useRef(true)
+
+  // Constants for throttling and debouncing
   const throttleDelay = 1000
   const debounceTimeout = 300
 
   useEffect(() => {
+    // Start entrance animation
     Animated.timing(animation, {
       toValue: 1,
-      duration: 100,
+      duration: 200, // Slightly longer for smoother animation
       useNativeDriver: true,
     }).start()
 
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      handleClose();
-      return true;
-    });
+    // Handle back button press
+    const backHandler = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleClose()
+      return true
+    })
 
-    return () => {
-      backHandler.remove();
-      Animated.timing(animation, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }).start()
+    // Load recent searches from storage (mock implementation)
+    // In a real app, you'd use AsyncStorage or similar
+    const loadRecentSearches = async () => {
+      // Mock data - replace with actual storage implementation
+      setRecentSearches([
+        // Example format - replace with your actual data structure
+        { Name: "Recent location 1", District: "District 1", Latitude: 37.7749, Longitude: -122.4194 },
+        { Name: "Recent location 2", District: "District 2", Latitude: 40.7128, Longitude: -74.006 },
+      ])
     }
-  }, [animation])
+
+    loadRecentSearches()
+
+    // Cleanup function
+    return () => {
+      isMounted.current = false
+      backHandler.remove()
+    }
+  }, [])
 
   const handleSearch = useCallback(() => {
-    const currentTime = Date.now();
-    if (currentTime - lastFetchTime < throttleDelay) {
-      return;
+    // Don't search if text is empty or too short
+    if (!searchText || searchText.trim().length < 2) {
+      setResults([])
+      setLoading(false)
+      return
     }
-    setLastFetchTime(currentTime);
 
-    fetchPhotonResults(searchText, setResults, setLoading, cache, setCache,bbox)
-      .catch((err) => {
-        setError('Something went wrong. Please try again.');
-        setLoading(false);
-      });
-  }, [searchText, cache, lastFetchTime]);
+    // Throttle requests
+    const currentTime = Date.now()
+    if (currentTime - lastFetchTime < throttleDelay) {
+      return
+    }
+
+    setLastFetchTime(currentTime)
+    setLoading(true)
+    setError(null)
+
+    fetchPhotonResults(searchText, setResults, setLoading, cache, setCache, bbox).catch((err) => {
+      console.error("Search error:", err)
+      if (isMounted.current) {
+        setError("Something went wrong. Please try again.")
+        setLoading(false)
+      }
+    })
+  }, [searchText, cache, lastFetchTime, bbox])
 
   useEffect(() => {
-    if (!searchText) {
-      setResults([]);
-      return;
+    // Debounce search requests
+    if (!searchText || searchText.trim().length < 2) {
+      setResults([])
+      setLoading(false)
+      return
     }
 
     const timeoutId = setTimeout(() => {
-      handleSearch();
-    }, debounceTimeout);
+      if (isMounted.current) {
+        handleSearch()
+      }
+    }, debounceTimeout)
 
-    return () => clearTimeout(timeoutId);
-  }, [searchText, handleSearch]);
+    return () => clearTimeout(timeoutId)
+  }, [searchText, handleSearch])
 
-  const handleResultSelect = async(item) => {
-    
-    setSearchText(item.Name)
-    if (setsearchPlace) {
-      setsearchPlace(item)
+  const handleResultSelect = (item) => {
+    try {
+      // Update search text with selected location name
+      setSearchText(item.Name)
+
+      // Update search place if setter is provided
+      if (setsearchPlace) {
+        setsearchPlace(item)
+      }
+
+      // Update coordinates for the map
+      setSearchLocationCords([item.Latitude, item.Longitude])
+
+      // Animate map to the selected location
+      if (mapRef.current) {
+        mapRef.current.animateCamera(
+          {
+            center: {
+              latitude: item.Latitude,
+              longitude: item.Longitude,
+            },
+            pitch: 0,
+            heading: 0,
+            zoom: 15,
+          },
+          { duration: 500 },
+        )
+      }
+
+      // Show marker on the map
+      setShowSearchMarker(true)
+
+      // Save to recent searches (mock implementation)
+      // In a real app, you'd use AsyncStorage or similar
+      saveToRecentSearches(item)
+
+      // Close the modal
+      handleClose()
+    } catch (error) {
+      console.error("Error selecting result:", error)
+      setError("Failed to select location. Please try again.")
     }
-    setSearchLocationCords([item.Latitude, item.Longitude])
-    mapRef.current?.animateCamera(
-      {
-        center: {
-          latitude: item.Latitude,
-          longitude: item.Longitude,
-        },
-        pitch: 0,
-        heading: 0,
-        zoom: 15,
-      },
-      { duration: 500 },
-    )
-    setShowMainSearch(false)
-    setShowSearchMarker(true)
-    handleClose()
+  }
+
+  const saveToRecentSearches = (item) => {
+    // Mock implementation - replace with actual storage logic
+    // This would typically involve AsyncStorage or similar
+    const updatedRecents = [item, ...recentSearches.filter((search) => search.Name !== item.Name).slice(0, 4)]
+    setRecentSearches(updatedRecents)
   }
 
   const handleClose = () => {
     Keyboard.dismiss()
+
+    // Exit animation
     Animated.timing(animation, {
       toValue: 0,
-      duration: 100,
+      duration: 150,
       useNativeDriver: true,
-    }).start(onClose)
+    }).start(() => {
+      if (onClose && isMounted.current) {
+        onClose()
+      }
+    })
+  }
+
+  const handleClear = () => {
+    setSearchText("")
+    setResults([])
+    setError(null)
   }
 
   const slideUp = animation.interpolate({
     inputRange: [0, 1],
     outputRange: [600, 0],
   })
+
+  const renderResultItem = ({ item }) => (
+    <TouchableOpacity onPress={() => handleResultSelect(item)} style={styles.resultItem} activeOpacity={0.7}>
+      <Ionicons name="location" size={20} color="#4285F4" style={styles.locationIcon} />
+      <View style={styles.resultTextContainer}>
+        <Text style={styles.resultName} numberOfLines={1}>
+          {item.Name}
+        </Text>
+        <Text style={styles.resultAddress} numberOfLines={1}>
+          {item.District}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  )
+
+  const renderEmptyResults = () => {
+    if (loading) return null
+
+    if (searchText && searchText.trim().length >= 2 && results.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="search-outline" size={40} color="#BDBDBD" />
+          <Text style={styles.emptyText}>No locations found</Text>
+          <Text style={styles.emptySubtext}>Try a different search term</Text>
+        </View>
+      )
+    }
+
+    return null
+  }
+
+  const renderRecentSearches = () => {
+    if (searchText || recentSearches.length === 0) return null
+
+    return (
+      <View style={styles.recentsContainer}>
+        <Text style={styles.recentsTitle}>Recent Searches</Text>
+        {recentSearches.map((item, index) => (
+          <TouchableOpacity
+            key={`recent-${index}`}
+            onPress={() => handleResultSelect(item)}
+            style={styles.recentItem}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="time-outline" size={20} color="#757575" style={styles.locationIcon} />
+            <View style={styles.resultTextContainer}>
+              <Text style={styles.resultName} numberOfLines={1}>
+                {item.Name}
+              </Text>
+              <Text style={styles.resultAddress} numberOfLines={1}>
+                {item.District}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    )
+  }
 
   return (
     <Animated.View
@@ -121,49 +264,72 @@ const SearchModal = ({
         },
       ]}
     >
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleClose} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Search Location</Text>
+      </View>
+
       <View style={styles.content}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color="#5F6368" style={styles.searchIcon} />
           <TextInput
             style={styles.input}
-            placeholder="Search here"
+            placeholder="Search for a place or address"
             placeholderTextColor="#5F6368"
             value={searchText}
-            onChangeText={(text) => {
-              setShowMainSearch(true)
-              setSearchText(text)
-            }}
+            onChangeText={setSearchText}
+            autoFocus={true}
+            returnKeyType="search"
+            onSubmitEditing={handleSearch}
+            clearButtonMode="while-editing"
           />
           {searchText.length > 0 && (
             <TouchableOpacity
-              onPress={() => {
-                setSearchText("")
-                setShowMainSearch(false)
-              }}
+              onPress={handleClear}
               style={styles.clearButton}
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
             >
               <Ionicons name="close-circle" size={20} color="#5F6368" />
             </TouchableOpacity>
           )}
         </View>
-        {loading && <ActivityIndicator size="small" color="#0000ff" />}
-        {error && <Text style={{ color: 'red', marginBottom: 10 }}>{error}</Text>}
-        {results.length > 0 && showMainSearch && (
+
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#1f9cbf" />
+            <Text style={styles.loadingText}>Searching...</Text>
+          </View>
+        )}
+
+        {error && (
+          <View style={styles.errorContainer}>
+            <MaterialIcons name="error-outline" size={20} color="#E53935" />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={handleSearch} style={styles.retryButton}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {renderRecentSearches()}
+
+        {results.length > 0 ? (
           <FlatList
             data={results}
-            keyExtractor={(item, index) => index.toString()}
-            renderItem={({ item }) => (
-              <TouchableOpacity onPress={() => handleResultSelect(item)} style={styles.resultItem}>
-                <Ionicons name="location" size={20} color="#4285F4" style={styles.locationIcon} />
-                <View>
-                  <Text style={styles.resultName}>{item.Name}</Text>
-                  <Text style={styles.resultAddress}>{item.District}</Text>
-                </View>
-              </TouchableOpacity>
-            )}
+            keyExtractor={(item, index) => `result-${index}`}
+            renderItem={renderResultItem}
             style={styles.resultsList}
             contentContainerStyle={styles.resultsContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={renderEmptyResults}
           />
+        ) : (
+          renderEmptyResults()
         )}
       </View>
     </Animated.View>
@@ -178,10 +344,29 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "rgb(255, 255, 255)",
+    zIndex: 999,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 50,
+    paddingBottom: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEEEEE",
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginLeft: 10,
+    color: "#212121",
   },
   content: {
     flex: 1,
-    paddingTop: 50,
+    paddingTop: 16,
     paddingHorizontal: 16,
   },
   searchBar: {
@@ -191,8 +376,12 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     paddingHorizontal: 16,
     height: 50,
-    elevation: 3,
+    elevation: 2,
     marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   searchIcon: {
     marginRight: 8,
@@ -201,9 +390,46 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: "#212121",
+    height: 50,
   },
   clearButton: {
-    padding: 4,
+    padding: 8,
+  },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+  },
+  loadingText: {
+    marginLeft: 8,
+    color: "#5F6368",
+    fontSize: 14,
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFEBEE",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
+    flex: 1,
+    marginLeft: 8,
+    color: "#E53935",
+    fontSize: 14,
+  },
+  retryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#E53935",
+    borderRadius: 4,
+  },
+  retryText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "500",
   },
   resultsList: {
     flex: 1,
@@ -214,18 +440,24 @@ const styles = StyleSheet.create({
   resultItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E0E0E0",
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
     marginVertical: 4,
-    marginHorizontal: 8,
     elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   locationIcon: {
     marginRight: 12,
+  },
+  resultTextContainer: {
+    flex: 1,
   },
   resultName: {
     fontSize: 16,
@@ -236,6 +468,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#5F6368",
     marginTop: 2,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 100,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: "#5F6368",
+    fontWeight: "500",
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: "#9E9E9E",
+    marginTop: 8,
+  },
+  recentsContainer: {
+    marginBottom: 16,
+  },
+  recentsTitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#212121",
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  recentItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E0E0E0",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    marginVertical: 4,
   },
 })
 

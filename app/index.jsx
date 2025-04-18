@@ -12,6 +12,7 @@ export default function Main() {
   const { loading, isLogged } = useGlobalContext();
 
   if (!loading && isLogged) return <Redirect href="/home" />;
+  if (!loading && !isLogged) return <Redirect href="/sign-in" />;
 
 
   return (

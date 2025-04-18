@@ -179,6 +179,16 @@ export default function Main() {
       return;
     }
     let bestRoute = await findshortestPath(Start, End);
+    let Options = await findTop3DistinctRoutes(Start, End);
+    
+    if (Options && Options.length > 0) {
+      let uniquePaths = Options.filter(
+        (item) => item.totalDistance !== bestRoute[0].totalDistance
+      );
+      bestRoute.push(...uniquePaths);
+    }
+    
+
     let data = [];
     let newPolylines = [];
     let roadDistance = [];
@@ -340,7 +350,6 @@ export default function Main() {
       SearchLocationCords: [],
       dirLoad: false,
       PlaceFrom: "",
-      alternativeButtonShow:true
     }));
 
     toggleSidebar();
@@ -379,79 +388,7 @@ export default function Main() {
     }));
   };
 
-  const handleAlternativeCheck = async () => {
-    try {
-      const alternativePaths = await findTop3DistinctRoutes(
-        state.alternativeFrom,
-        state.alternativeTo,
-        user.District
-      );
-      const uniquePaths = alternativePaths.filter(
-        (item) => item.totalDistance !== state.mainpath
-      );
-
-      if (uniquePaths.length === 0) {
-        Toast.show({
-          type: "error",
-          text1: "No alternative routes found",
-          text2: "Sorry, this is the only route available",
-        });
-        setState((prevState) => ({
-          ...prevState,
-          alternativeFrom: "",
-          alternativeTo: "",
-          alternativeButtonShow: false,
-          mainpath: null,
-        }));
-        return;
-      }
-
-      let data = [];
-      let newPolylines = [];
-      let updatedRoadDistance = [...state.roadDistance]; // Copy the existing road distances
-      let i = 0;
-
-      for (const doc of uniquePaths) {
-        if (i === 2) break;
-        if (!doc.path) {
-          console.error("Invalid path in bestRoute document:", doc);
-          continue;
-        }
-
-        // Add the distance of the current path to the roadDistance array
-        updatedRoadDistance.push(doc.totalDistance);
-
-        let separate = await fetchAndSeparatePaths(doc.path);
-        let merged = await merge(separate);
-        let res = await combination(
-          separate,
-          merged,
-          state.alternativeFrom,
-          state.alternativeTo
-        );
-
-        data.push(res);
-        let polylineData = await polylinemaker(doc.path);
-        newPolylines.push(polylineData);
-        i++;
-      }
-
-      setState((prevState) => ({
-        ...prevState,
-        routeData: [...prevState.routeData, ...data],
-        polylines: [...prevState.polylines, ...newPolylines],
-        roadDistance: updatedRoadDistance, // Update state once after the loop
-        alternativeFrom: "",
-        alternativeTo: "",
-        alternativeButtonShow: false,
-        mainpath: null,
-      }));
-
-      toggleSidebar();
-    } catch (err) {
-      console.error("Error in handleAlternativeCheck:", err);
-    }
-  };
+  
 
   const handleLayersPress = async () => {
     setState((prevState) => ({
@@ -766,7 +703,7 @@ export default function Main() {
                 latitude: state.placeend[0][0],
                 longitude: state.placeend[0][1],
               }}
-              title={state.to.Name}
+              title={state.to.Name||""}
               draggable={true}
               onDragEnd={(e) => {
                 const { latitude, longitude } = e.nativeEvent.coordinate;
@@ -999,22 +936,7 @@ export default function Main() {
           <Ionicons name="close-sharp" size={34} color="black" />
         </TouchableOpacity>
       )}
-      {state.alternativeButtonShow && (
-        <TouchableOpacity
-          onPress={handleAlternativeCheck}
-          style={{
-            position: "absolute",
-            bottom: 220,
-            right: 10,
-            backgroundColor: "#5571b5",
-            borderRadius: 20,
-            padding: 10,
-            elevation: 5,
-          }}
-        >
-          <Feather name="git-pull-request" size={34} color="black" />
-        </TouchableOpacity>
-      )}
+      
       <TouchableOpacity
         onPress={handleSearchViewOpen}
         style={{
