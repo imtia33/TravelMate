@@ -52,7 +52,6 @@ const CustomTabBar = ({ state, descriptors, navigation, isKeyboardVisible }) => 
   return (
     <Animated.View
       style={{
-        position: "absolute",
         bottom: 0,
         width: "100%",
         height: tabBarHeight,

@@ -10,55 +10,64 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const MAX_HEIGHT = SCREEN_HEIGHT * 0.9; // Fully expanded
-const Init_HEIGHT = SCREEN_HEIGHT * 0.4; // Fully expanded
-const MIN_HEIGHT = 100; // Fully collapsed
-const TAB_BAR_HEIGHT = 70; // Assuming a bottom tab bar height
+const MAX_HEIGHT = SCREEN_HEIGHT * 0.6;
+const Init_HEIGHT = SCREEN_HEIGHT * 0.4;
+const MIN_HEIGHT = 45;
 
 const BottomSheet = ({ setIsBottomSheetVisible, children, closeandclear }) => {
   const translateY = useRef(new Animated.Value(Init_HEIGHT)).current;
-  const lastHeight = useRef(Init_HEIGHT); // Store last position
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: () => true, // Always activate drag
-      onPanResponderGrant: () => {
-        lastHeight.current = translateY._value; // Store current position when drag starts
-      },
-      onPanResponderMove: (_, gestureState) => {
-        let newHeight = lastHeight.current - gestureState.dy; // Move exactly with user
-        newHeight = Math.max(MIN_HEIGHT, Math.min(newHeight, MAX_HEIGHT)); // Restrict movement
-        translateY.setValue(newHeight);
-      },
-      onPanResponderRelease: () => {
-        lastHeight.current = translateY._value; // Update last position when user stops dragging
-      },
-    })
-  ).current;
+  const lastHeight = useRef(Init_HEIGHT);
 
   const closeBottomSheet = () => {
     setIsBottomSheetVisible(false);
     closeandclear();
   };
 
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        lastHeight.current = translateY._value;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        let newHeight = lastHeight.current - gestureState.dy;
+        newHeight = Math.max(MIN_HEIGHT, Math.min(newHeight, MAX_HEIGHT));
+        translateY.setValue(newHeight);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const attemptedHeight = lastHeight.current - gestureState.dy;
+        if (attemptedHeight < MIN_HEIGHT) {
+          closeBottomSheet();
+        } else {
+          lastHeight.current = translateY._value;
+        }
+      },
+    })
+  ).current;
+
   return (
-    <Animated.View
-      style={[styles.bottomSheet, { height: translateY }]}
-      {...panResponder.panHandlers}
-    >
+    <Animated.View style={[styles.bottomSheet, { height: translateY }]}>
       <View style={styles.header}>
-        <View style={styles.dragHandle} />
-        <TouchableOpacity 
+        <View
           style={{
-            backgroundColor: "rgba(203, 202, 202, 0.5)",
+            width: 50,
+            height: 5,
+            backgroundColor: "#aaa",
             borderRadius: 10,
-            padding: 5,
-            left:'87%',
-            top:15,
-          }} 
-          onPress={closeBottomSheet}
-        >
-          <Ionicons name="close" size={30} color="black" />
+            position: "absolute",
+            left: "52%",
+            top: 5,
+            marginLeft: -25,
+            zIndex: 2,
+          }}
+          {...panResponder.panHandlers} 
+        />
+        <View
+          style={styles.dragHandle}
+          {...panResponder.panHandlers}
+        />
+        <TouchableOpacity style={styles.closeButton} onPress={closeBottomSheet}>
+          <Ionicons style={{right:2,bottom:2}} name="close" size={30} color="black" />
         </TouchableOpacity>
       </View>
       <View style={styles.content}>{children}</View>
@@ -75,41 +84,44 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     elevation: 10,
+    
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 10,
-    paddingVertical: 0,
+    paddingTop: 10,
+    paddingBottom: 0,
+    
   },
   dragHandle: {
-    width: 50,
-    height: 5,
-    backgroundColor: "#aaa",
+    width: '95%',
+    height: 60,
     borderRadius: 10,
-
     position: "absolute",
-    left: "50%",
     top: 5,
+    marginLeft: -25, // center align
+    zIndex: 2,
+    marginBottom:50,
   },
-  // Make the touch area larger
   closeButton: {
-    backgroundColor: "rgba(203, 202, 202, 0.5)",
     borderRadius: 10,
-    padding: 10, // Increase from 5 to 10
-    width: 44, // Explicit width
-    height: 44, // Explicit height
-    alignItems: "center", // Center the icon
-    justifyContent: "center", // Center the icon
-    position: "absolute", // Use absolute positioning
-    right: 15, // Use right instead of left
+    padding: 10,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "absolute",
+    right: 15,
     top: 10,
-    zIndex: 10, // Ensure it's above other elements
+    zIndex: 10,
   },
   content: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 15,
+    paddingTop: 10,
+    paddingBottom: 20,
   },
 });
 

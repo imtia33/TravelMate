@@ -551,12 +551,7 @@ export default function Main() {
   }, [state.isdirectionVisible, state.isSearchModalVisible]);
 
   const getLongPressPlace = async (lat, long) => {
-    setState((prevState) => ({
-      ...prevState,
-      isBottomSheetVisible: true,
-      SearchLocationCords: [lat, long],
-      showSearchMarker: true,
-    }));
+    
     const res = await getPlaceDetails(lat, long);
     const r1 = {
       Name: res.display_name,
@@ -587,6 +582,10 @@ export default function Main() {
       placeStart: [],
       placeSearchOn: false,
       setSearchText: res.display_name,
+      
+      isBottomSheetVisible: true,
+      SearchLocationCords: [lat, long],
+      showSearchMarker: true,
     }));
   };
   return (
@@ -597,8 +596,8 @@ export default function Main() {
         style={{ ...StyleSheet.absoluteFillObject }}
         mapType={state.UrlTile ? "none" : state.mapType}
         flipY={false}
-        showsTraffic={state.UrlTile ? false : true}
-        showsBuildings={state.UrlTile ? false : true}
+        showsTraffic={true}
+        showsBuildings={true}
         onMapReady={() => {
           setState((prevState) => ({
             ...prevState,
@@ -703,7 +702,7 @@ export default function Main() {
                 latitude: state.placeend[0][0],
                 longitude: state.placeend[0][1],
               }}
-              title={state.to.Name||""}
+              title={state.to?state.to.Name:""}
               draggable={true}
               onDragEnd={(e) => {
                 const { latitude, longitude } = e.nativeEvent.coordinate;
@@ -792,7 +791,7 @@ export default function Main() {
           ) : (
             <Text
               style={{
-                color: "rgba(2, 1, 1, 0.49)",
+                color: "rgba(2, 1, 1, 0.8)",
                 fontFamily: "pm",
                 fontSize: 20,
                 top: 2,
@@ -1056,226 +1055,217 @@ export default function Main() {
       )}
       {state.isBottomSheetVisible && (
         <BottomSheet
-          setIsBottomSheetVisible={(value) =>
-            setState((prevState) => ({
-              ...prevState,
-              isBottomSheetVisible: value,
-            }))
-          }
-          closeandclear={closeandclear}
-        >
-          <ScrollView style={{ padding: 0 }}>
+        setIsBottomSheetVisible={(value) =>
+          setState((prevState) => ({
+            ...prevState,
+            isBottomSheetVisible: value,
+          }))
+        }
+        closeandclear={closeandclear}
+      >
+        <View style={{ padding: 10 }}>
+          <View style={{ marginTop: 20 }}>
             <Text
               style={{
                 fontFamily: "psemibold",
                 fontSize: 17,
-                flex: 1,
-                marginBottom: 2,
+                marginBottom: 5,
               }}
             >
               {state?.searchPlace.Name}
             </Text>
-            <View style={{ flexDirection: "row", marginBottom: 5 }}>
-              <Text
-                style={{
-                  fontFamily: "pm",
-                  fontSize: 15,
-                  flex: 1,
-                  marginBottom: 2,
-                }}
-              >
-                {state?.searchPlace.District}
-              </Text>
-            </View>
-
-            <View
-              style={{
-                height: 1,
-                width: "100%",
-                backgroundColor: "rgba(165, 170, 184, 0.5)",
-                marginBottom: 4,
-              }}
-            />
             <Text
               style={{
-                fontFamily: "psemibold",
-                fontSize: 17,
-                flex: 1,
-                marginBottom: 2,
-                color: "rgba(169, 6, 87, 0.87)",
+                fontFamily: "pm",
+                fontSize: 15,
+                marginBottom: 5,
               }}
             >
-              Get Direction:
+              {state?.searchPlace.District}
             </Text>
-            <View
+          </View>
+      
+          <View
+            style={{
+              height: 1,
+              width: "100%",
+              backgroundColor: "rgba(165, 170, 184, 0.5)",
+              marginBottom: 10,
+            }}
+          />
+          <Text
+            style={{
+              fontFamily: "psemibold",
+              fontSize: 17,
+              marginBottom: 10,
+              color: "rgba(169, 6, 87, 0.87)",
+            }}
+          >
+            Get Direction:
+          </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginBottom: 10,
+            }}
+          >
+            <TouchableOpacity
+              disabled={state.dirLoad}
+              onPress={() => {
+                setState((prevState) => ({
+                  ...prevState,
+                  isdirectionVisible: true,
+                  to: {
+                    Name: state.searchPlace.Name,
+                    lat: state.searchPlace.Latitude,
+                    long: state.searchPlace.Longitude,
+                  },
+                }));
+              }}
               style={{
+                backgroundColor: "rgb(15, 169, 135)",
+                borderRadius: 30,
+                padding: 10,
                 flexDirection: "row",
-                justifyContent: "space-between",
+                justifyContent: "center",
                 alignItems: "center",
+                flex: 1,
+                marginRight: 5,
               }}
             >
-              <TouchableOpacity
-                disabled={state.dirLoad}
-                onPress={() => {
-                  setState((prevState) => ({
-                    ...prevState,
-                    isdirectionVisible: true,
-                    to: {
-                      Name: state.searchPlace.Name,
-                      lat: state.searchPlace.Latitude,
-                      long: state.searchPlace.Longitude,
-                    },
-                  }));
-                }}
-                style={{
-                  backgroundColor: "rgb(15, 169, 135)",
-                  borderRadius: 30,
-                  padding: 10,
-                  flexDirection: "row",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  flex: 1,
-                  marginRight: 5,
-                }}
+              <MaterialIcons name="directions" size={20} color="white" />
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={{ color: "white", marginLeft: 5, fontSize: 14 }}
               >
-                <MaterialIcons name="directions" size={20} color="white" />
-                <Text style={{ color: "white", marginLeft: 5 }}>
-                  From A Point
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                disabled={state.dirLoad}
-                onPress={async () => {
-                  const res = await AskForLocationPermission();
-                  if (res.error !== 103) {
-                    Toast.show({
-                      type: "error",
-                      text1: res.message,
-                    });
-                    setState((prevState) => ({ ...prevState, dirLoad: false }));
-                    return;
+                From A Point
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={state.dirLoad}
+              onPress={async () => {
+                const res = await AskForLocationPermission();
+                if (res.error !== 103) {
+                  Toast.show({
+                    type: "error",
+                    text1: res.message,
+                  });
+                  setState((prevState) => ({ ...prevState, dirLoad: false }));
+                  return;
+                }
+                let currentLocation = await Location.getCurrentPositionAsync({});
+                if (!currentLocation) {
+                  Toast.show({
+                    type: "error",
+                    text1: "Please Turn on your Location",
+                  });
+                  return;
+                }
+      
+                getPath(
+                  {
+                    Name: "Your Location",
+                    lat: currentLocation?.coords.latitude,
+                    long: currentLocation?.coords.longitude,
+                  },
+                  {
+                    Name: state.searchPlace.Name,
+                    lat: state.searchPlace.Latitude,
+                    long: state.searchPlace.Longitude,
                   }
-                  let currentLocation = await Location.getCurrentPositionAsync(
-                    {}
-                  );
-                  if (!currentLocation) {
-                    Toast.show({
-                      type: "error",
-                      text1: "Please Turn on your Location",
-                    });
-                    return;
-                  }
-
-                  getPath(
-                    {
-                      Name: "Your Location",
-                      lat: currentLocation?.coords.latitude,
-                      long: currentLocation?.coords.longitude,
-                    },
-                    {
-                      Name: state.searchPlace.Name,
-                      lat: state.searchPlace.Latitude,
-                      long: state.searchPlace.Longitude,
-                    }
-                  );
-                  setState((p) => ({
-                    ...p,
-                    from: {
-                      Name: "Your Location",
-                      lat: currentLocation?.coords.latitude,
-                      long: currentLocation?.coords.longitude,
-                    },
-                    to: {
-                      Name: state.searchPlace.Name,
-                      lat: state.searchPlace.Latitude,
-                      long: state.searchPlace.Longitude,
-                    },
-                  }));
-                }}
-                style={{
-                  backgroundColor: "rgb(15, 169, 135)",
-                  borderRadius: 30,
-                  padding: 10,
-                  flexDirection: "row",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  flex: 1,
-                  marginLeft: 5,
-                }}
-              >
-                <MaterialIcons name="my-location" size={20} color="white" />
-                <Text style={{ color: "white", marginLeft: 5 }}>
-                  From My Location
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View
+                );
+                setState((p) => ({
+                  ...p,
+                  from: {
+                    Name: "Your Location",
+                    lat: currentLocation?.coords.latitude,
+                    long: currentLocation?.coords.longitude,
+                  },
+                  to: {
+                    Name: state.searchPlace.Name,
+                    lat: state.searchPlace.Latitude,
+                    long: state.searchPlace.Longitude,
+                  },
+                }));
+              }}
               style={{
-                backgroundColor: "white",
-                padding: 5,
-                borderRadius: 12,
-                marginBottom: 10,
+                backgroundColor: "rgb(15, 169, 135)",
+                borderRadius: 30,
+                padding: 10,
+                flexDirection: "row",
+                justifyContent: "center",
+                alignItems: "center",
+                flex: 1,
+                marginLeft: 5,
               }}
             >
-              {state.searchPlace?.type && (
-                <View
+              <MaterialIcons name="my-location" size={20} color="white" />
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={{ color: "white", marginLeft: 5, fontSize: 14 }}
+              >
+                From My Location
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View
+            style={{
+              backgroundColor: "white",
+              padding: 10,
+              borderRadius: 12,
+              marginBottom: 10,
+            }}
+          >
+            {(state.searchPlace?.type&&state.searchPlace?.type!=="Yes") && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 5,
+                }}
+              >
+                <Text style={{ fontFamily: "pm", fontSize: 17 }}>Type: </Text>
+                <Text style={{ fontSize: 16, fontFamily: "pl" }}>
+                  {state.searchPlace.type.charAt(0).toUpperCase() +
+                    state.searchPlace.type.slice(1)}
+                </Text>
+              </View>
+            )}
+            {state.searchPlace?.area && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 5,
+                }}
+              >
+                <Text style={{ fontFamily: "pm", fontSize: 17 }}>Area: </Text>
+                <Text style={{ fontSize: 16, fontFamily: "pl" }}>
+                  {state.searchPlace.area}
+                </Text>
+              </View>
+            )}
+            {state.searchPlace?.street && (
+              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                <Text style={{ fontFamily: "pm", fontSize: 17 }}>Street: </Text>
+                <Text
                   style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 5,
+                    fontSize: 16,
+                    fontFamily: "pl",
+                    flex: 1,
+                    flexWrap: "wrap",
                   }}
                 >
-                  <Text style={{ fontFamily: "pb", fontSize: 17 }}>
-                    Type :{" "}
-                  </Text>
-                  <Text style={{ fontSize: 16, fontFamily: "pm" }}>
-                    {state.searchPlace.type.charAt(0).toUpperCase() +
-                      state.searchPlace.type.slice(1)}
-                  </Text>
-                </View>
-              )}
-              {state.searchPlace?.area && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 5,
-                  }}
-                >
-                  <Text style={{ fontFamily: "pb", fontSize: 17 }}>
-                    Area :{" "}
-                  </Text>
-                  <Text style={{ fontSize: 17, fontFamily: "pm" }}>
-                    {state.searchPlace.area}
-                  </Text>
-                </View>
-              )}
-              {state.searchPlace?.street && (
-                <View
-                  style={{ flexDirection: "row", alignItems: "flex-start" }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                      <Text style={{ fontFamily: "pb", fontSize: 17 }}>
-                        Street :{" "}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 17,
-                          flex: 1,
-                          flexWrap: "wrap",
-                          fontFamily: "pm",
-                        }}
-                      >
-                        {state.searchPlace.street}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-            </View>
-          </ScrollView>
-        </BottomSheet>
+                  {state.searchPlace.street}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </BottomSheet>
       )}
       <Toast />
     </View>

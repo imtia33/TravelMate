@@ -235,4 +235,3 @@ const styles = StyleSheet.create({
 });
 
 export default EnhancedCustomDropdown;
-

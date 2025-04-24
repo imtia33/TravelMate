@@ -1,5 +1,3 @@
-
-
 import { useState, useEffect, useCallback } from "react"
 import {
   View,
@@ -12,9 +10,11 @@ import {
   Keyboard,
   BackHandler,
   ActivityIndicator,
+  Modal,
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import { fetchPhotonResults } from "../lib/pathfinder"
+import MapView, { Marker } from "react-native-maps" // Make sure this is installed
 
 const PickPlace = ({
   currentFocus,
@@ -34,20 +34,27 @@ const PickPlace = ({
   const [cache, setCache] = useState(new Map())
   const [lastFetchTime, setLastFetchTime] = useState(0)
   const [error, setError] = useState(null)
+  
+  // New states for map preview modal
+  const [mapModalVisible, setMapModalVisible] = useState(false)
+  const [selectedLocation, setSelectedLocation] = useState(null)
 
   const throttleDelay = 1000
   const debounceTimeout = 300
 
-  // Fix: Removed showMainSearch state as it was causing the modal to not reopen
-
   useEffect(() => {
     Animated.timing(animation, {
       toValue: 1,
-      duration: 200, // Increased for smoother animation
+      duration: 200,
       useNativeDriver: true,
     }).start()
 
     const backHandler = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (mapModalVisible) {
+        // Close map modal first if it's open
+        setMapModalVisible(false)
+        return true
+      }
       handleClose()
       return true
     })
@@ -55,7 +62,7 @@ const PickPlace = ({
     return () => {
       backHandler.remove()
     }
-  }, [animation])
+  }, [animation, mapModalVisible])
 
   const handleSearch = useCallback(() => {
     const currentTime = Date.now()
@@ -106,10 +113,8 @@ const PickPlace = ({
         setToText(item.Name)
       }
 
-      // Fix: Dismiss keyboard before closing modal
       Keyboard.dismiss()
 
-      // Fix: Use a timeout to ensure state updates before closing
       setTimeout(() => {
         setsearchModal(false)
       }, 100)
@@ -119,10 +124,20 @@ const PickPlace = ({
     }
   }
 
+  // New handler for long press on a result item
+  const handleResultLongPress = (item) => {
+    setSelectedLocation({
+      name: item.Name,
+      latitude: item.Latitude,
+      longitude: item.Longitude,
+      address: item.District,
+    })
+    setMapModalVisible(true)
+  }
+
   const handleClose = () => {
     Keyboard.dismiss()
 
-    // Fix: Ensure animation completes before closing modal
     Animated.timing(animation, {
       toValue: 0,
       duration: 150,
@@ -134,9 +149,6 @@ const PickPlace = ({
 
   const handleClear = () => {
     setFcousText("")
-
-    // Fix: Don't automatically close modal or clear location when clearing search text
-    // This allows users to start a new search
   }
 
   const slideUp = animation.interpolate({
@@ -200,7 +212,13 @@ const PickPlace = ({
             data={results}
             keyExtractor={(item, index) => `result-${index}`}
             renderItem={({ item }) => (
-              <TouchableOpacity onPress={() => handleResultSelect(item)} style={styles.resultItem} activeOpacity={0.7}>
+              <TouchableOpacity 
+                onPress={() => handleResultSelect(item)} 
+                onLongPress={() => handleResultLongPress(item)}
+                delayLongPress={500}
+                style={styles.resultItem} 
+                activeOpacity={0.7}
+              >
                 <Ionicons name="location" size={20} color="#4285F4" style={styles.locationIcon} />
                 <View style={styles.resultTextContainer}>
                   <Text style={styles.resultName} numberOfLines={1}>
@@ -224,6 +242,72 @@ const PickPlace = ({
           </View>
         ) : null}
       </View>
+
+      {/* Map Preview Modal */}
+      <Modal
+        visible={mapModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMapModalVisible(false)}
+      >
+        <View style={styles.mapModalContainer}>
+          <View style={styles.mapModalContent}>
+            <View style={styles.mapModalHeader}>
+              <Text style={styles.mapModalTitle} numberOfLines={1}>
+                {selectedLocation?.name}
+              </Text>
+              <TouchableOpacity 
+                onPress={() => setMapModalVisible(false)}
+                style={styles.mapModalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            {selectedLocation && (
+              <View style={styles.mapContainer}>
+                <MapView
+                  style={styles.map}
+                  initialRegion={{
+                    latitude: selectedLocation.latitude,
+                    longitude: selectedLocation.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  }}
+                >
+                  <Marker
+                    coordinate={{
+                      latitude: selectedLocation.latitude,
+                      longitude: selectedLocation.longitude,
+                    }}
+                    title={selectedLocation.name}
+                    description={selectedLocation.address}
+                  />
+                </MapView>
+              </View>
+            )}
+            
+            <View style={styles.mapModalFooter}>
+              <TouchableOpacity 
+                style={styles.selectButton}
+                onPress={() => {
+                  setMapModalVisible(false);
+                  if (selectedLocation) {
+                    const item = {
+                      Name: selectedLocation.name,
+                      Latitude: selectedLocation.latitude,
+                      Longitude: selectedLocation.longitude,
+                    };
+                    handleResultSelect(item);
+                  }
+                }}
+              >
+                <Text style={styles.selectButtonText}>Select this location</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   )
 }
@@ -340,6 +424,11 @@ const styles = StyleSheet.create({
     color: "#5F6368",
     marginTop: 2,
   },
+  longPressHint: {
+    fontSize: 12,
+    color: "#9E9E9E",
+    marginLeft: 8,
+  },
   noResultsContainer: {
     flex: 1,
     alignItems: "center",
@@ -356,6 +445,62 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#9E9E9E",
     marginTop: 8,
+  },
+  // Map Modal Styles
+  mapModalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  mapModalContent: {
+    backgroundColor: "white",
+    borderRadius: 12,
+    width: "100%",
+    maxHeight: "70%",
+    overflow: "hidden",
+    elevation: 5,
+  },
+  mapModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEEEEE",
+  },
+  mapModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#212121",
+    flex: 1,
+  },
+  mapModalCloseButton: {
+    padding: 4,
+  },
+  mapContainer: {
+    height: 300,
+    width: "100%",
+  },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapModalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#EEEEEE",
+  },
+  selectButton: {
+    backgroundColor: "#1f9cbf",
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+  },
+  selectButtonText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 16,
   },
 })
 

@@ -1,8 +1,8 @@
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
-import { SplashScreen, Stack,router } from "expo-router";
+import { SplashScreen, Stack, } from "expo-router";
 import GlobalProvider from "../context/GlobalProvider";
-import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
+import { SQLiteProvider } from 'expo-sqlite';
 SplashScreen.preventAutoHideAsync();
 const RootLayout = () => {
   const [fontsLoaded, error] = useFonts({

@@ -1,7 +1,7 @@
 
-# 🚗 TravelMate - Smart Route Planner
+# 🚗 TravX - Smart Route Planner
 
-TravelMate is a **modern mobile application** designed to simplify your travel experience. Whether you're commuting to work, exploring a new city, or planning a road trip, TravelMate helps you find the **most efficient routes** from your current location to your destination. With seamless integration of **Google Maps** and **Photon**, the app offers **real-time route optimization**, **interactive maps**, and **offline route-saving capabilities**.
+TravX is a **modern mobile application** designed to simplify your travel experience. Whether you're commuting to work, exploring a new city, or planning a road trip, TravX helps you find the **most efficient routes** from your current location to your destination. With seamless integration of **Google Maps** and **Photon**, the app offers **real-time route optimization**, **interactive maps**, and **offline route-saving capabilities**.
 
 ---
 
@@ -28,8 +28,8 @@ TravelMate is a **modern mobile application** designed to simplify your travel e
 ### Steps to Get Started
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/your-username/travelmate.git
-   cd travelmate
+   git clone https://github.com/your-username/TravX.git
+   cd TravX
    ```
 
 2. **Install Dependencies**:
@@ -126,8 +126,8 @@ We welcome contributions from the community! Here’s how you can help:
 
 1. **Fork the Repository**:
    ```bash
-   git clone https://github.com/your-username/travelmate.git
-   cd travelmate
+   git clone https://github.com/your-username/TravX.git
+   cd TravX
    ```
 
 2. **Create a New Branch**:

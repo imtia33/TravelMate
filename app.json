@@ -1,12 +1,11 @@
 {
   "expo": {
     "name": "TravX",
-    "slug": "travx",
-    "version": "1.0.0",
+    "slug": "travelmate",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    
     "scheme": [
       "travx"
     ],
@@ -35,7 +34,7 @@
           "data": [
             {
               "scheme": "https",
-              "host": "travelmate-axi.web.app",
+              "host": "trav-x.web.app",
               "pathPrefix": "/verifying"
             }
           ],

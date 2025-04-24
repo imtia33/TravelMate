@@ -394,7 +394,7 @@ export default function Home() {
               </View>
             </View>
 
-            <View style={{ flex: 1, justifyContent: "flex-end", bottom: 30 }}>
+            <View style={{ flex: 1, justifyContent: "flex-end", bottom: 100 }}>
               <TouchableOpacity
                 onPress={logout}
                 style={{
@@ -415,6 +415,7 @@ export default function Home() {
                     fontSize: 16,
                     fontWeight: "500",
                     color: "red",
+
                   }}
                 >
                   Logout

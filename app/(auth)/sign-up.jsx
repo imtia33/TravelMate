@@ -17,7 +17,7 @@ const SignUp = () => {
   }, []);
   
   const [isSubmitting, setSubmitting] = useState(false);
-  const [locationData, setLocationData] = useState([]);  // represent districts
+  const [locationData, setLocationData] = useState([]); 
   const [form, setForm] = useState({
     username: "",
     email: "",

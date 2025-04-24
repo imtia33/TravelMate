@@ -32,7 +32,6 @@ const SearchModal = ({
   const [cache, setCache] = useState(new Map())
   const [lastFetchTime, setLastFetchTime] = useState(0)
   const [error, setError] = useState(null)
-  const [recentSearches, setRecentSearches] = useState([])
 
   // Ref to track if component is mounted
   const isMounted = useRef(true)
@@ -55,18 +54,7 @@ const SearchModal = ({
       return true
     })
 
-    // Load recent searches from storage (mock implementation)
-    // In a real app, you'd use AsyncStorage or similar
-    const loadRecentSearches = async () => {
-      // Mock data - replace with actual storage implementation
-      setRecentSearches([
-        // Example format - replace with your actual data structure
-        { Name: "Recent location 1", District: "District 1", Latitude: 37.7749, Longitude: -122.4194 },
-        { Name: "Recent location 2", District: "District 2", Latitude: 40.7128, Longitude: -74.006 },
-      ])
-    }
-
-    loadRecentSearches()
+    
 
     // Cleanup function
     return () => {
@@ -151,9 +139,7 @@ const SearchModal = ({
       // Show marker on the map
       setShowSearchMarker(true)
 
-      // Save to recent searches (mock implementation)
-      // In a real app, you'd use AsyncStorage or similar
-      saveToRecentSearches(item)
+      
 
       // Close the modal
       handleClose()
@@ -163,12 +149,7 @@ const SearchModal = ({
     }
   }
 
-  const saveToRecentSearches = (item) => {
-    // Mock implementation - replace with actual storage logic
-    // This would typically involve AsyncStorage or similar
-    const updatedRecents = [item, ...recentSearches.filter((search) => search.Name !== item.Name).slice(0, 4)]
-    setRecentSearches(updatedRecents)
-  }
+  
 
   const handleClose = () => {
     Keyboard.dismiss()
@@ -226,33 +207,7 @@ const SearchModal = ({
     return null
   }
 
-  const renderRecentSearches = () => {
-    if (searchText || recentSearches.length === 0) return null
-
-    return (
-      <View style={styles.recentsContainer}>
-        <Text style={styles.recentsTitle}>Recent Searches</Text>
-        {recentSearches.map((item, index) => (
-          <TouchableOpacity
-            key={`recent-${index}`}
-            onPress={() => handleResultSelect(item)}
-            style={styles.recentItem}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="time-outline" size={20} color="#757575" style={styles.locationIcon} />
-            <View style={styles.resultTextContainer}>
-              <Text style={styles.resultName} numberOfLines={1}>
-                {item.Name}
-              </Text>
-              <Text style={styles.resultAddress} numberOfLines={1}>
-                {item.District}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-    )
-  }
+  
 
   return (
     <Animated.View
@@ -315,7 +270,6 @@ const SearchModal = ({
           </View>
         )}
 
-        {renderRecentSearches()}
 
         {results.length > 0 ? (
           <FlatList
