@@ -180,7 +180,7 @@ const MenuScreen = () => {
                 </View>
                 
                 <View style={styles.categoryBadge}>
-                  <Text style={styles.categoryText}>Restaurant</Text>
+                  <Text style={styles.categoryText}>Food Cart</Text>
                 </View>
               </View>
             </View>

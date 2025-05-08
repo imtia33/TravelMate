@@ -26,17 +26,11 @@ import MapView, {
   Circle,
   AnimatedRegion,
   UrlTile,
-  MapUrlTile,
+  
 } from "react-native-maps";
 import {
   Ionicons,
-  Entypo,
-  FontAwesome,
   MaterialIcons,
-  AntDesign,
-  FontAwesome6,
-  Octicons,
-  Feather,
 } from "@expo/vector-icons";
 import RouteDisplay from "../../components/RouteDisplay";
 import { useGlobalContext } from "../../context/GlobalProvider";
@@ -48,12 +42,10 @@ import {
   merge,
   combination,
   polylinemaker,
-  expandPath,
   generateArcPath,
   findClosestLocation,
   findshortestPath,
   AskForLocationPermission,
-  calculatePolylineLength,
   fetchLocationDetails,
   calcDistance,
   checkExpandNeeded,
@@ -65,6 +57,7 @@ import BottomSheet from "../../components/BottomSheet";
 const { width, height } = Dimensions.get("window");
 import { getPlaceDetails } from "../../lib/appwrite";
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
+import RouteBottomSheet from "../../components/RouteBottomSheet";
 import PlaceDirection from "../../components/PlaceDirection";
 import { icons } from "../../constants";
 export default function Main() {
@@ -137,6 +130,7 @@ export default function Main() {
     isSearchModalVisible: false,
     searchPlace: [],
     isBottomSheetVisible: false,
+    isRouteBottomSheetVisible: false,
     placeSearchOn: false,
     placeStart: [],
     placeend: [],
@@ -180,14 +174,13 @@ export default function Main() {
     }
     let bestRoute = await findshortestPath(Start, End);
     let Options = await findTop3DistinctRoutes(Start, End);
-    
+
     if (Options && Options.length > 0) {
       let uniquePaths = Options.filter(
         (item) => item.totalDistance !== bestRoute[0].totalDistance
       );
       bestRoute.push(...uniquePaths);
     }
-    
 
     let data = [];
     let newPolylines = [];
@@ -208,18 +201,19 @@ export default function Main() {
         false,
         To.Name
       );
-      
-      if(expansionCheckEnd.cut){
+
+      if (expansionCheckEnd.cut) {
         polylineData = polylineData.slice(0, expansionCheckEnd.index + 1);
         const distanceReduced = doc.totalDistance - expansionCheckEnd.cutLength;
         doc.totalDistance -= distanceReduced;
         for (let i = 0; i < separate.length; i++) {
-          if (separate[i].From === doc.path[doc.path.length - 2] && 
-              separate[i].To === doc.path[doc.path.length - 1]) {
+          if (
+            separate[i].From === doc.path[doc.path.length - 2] &&
+            separate[i].To === doc.path[doc.path.length - 1]
+          ) {
             separate[i].To = expansionCheckEnd.Name;
             separate[i].distance = separate[i].distance - distanceReduced;
             separate[i].fare = await fare(separate[i].distance, separate[i]);
-           
           }
         }
       } else {
@@ -239,13 +233,19 @@ export default function Main() {
         From.Name
       );
 
-      if(expansionCheckFront.cut){
-        polylineData = polylineData.slice(expansionCheckFront.index + 1, polylineData.length);
-        const distanceReduced = doc.totalDistance - expansionCheckFront.cutLength;
+      if (expansionCheckFront.cut) {
+        polylineData = polylineData.slice(
+          expansionCheckFront.index + 1,
+          polylineData.length
+        );
+        const distanceReduced =
+          doc.totalDistance - expansionCheckFront.cutLength;
         doc.totalDistance -= distanceReduced;
         for (let i = 0; i < separate.length; i++) {
-          if (separate[i].From === doc.path[0] && 
-              separate[i].To === doc.path[1]) {
+          if (
+            separate[i].From === doc.path[0] &&
+            separate[i].To === doc.path[1]
+          ) {
             separate[i].From = expansionCheckFront.Name;
             separate[i].distance = separate[i].distance - distanceReduced;
             separate[i].fare = await fare(separate[i].distance, separate[i]);
@@ -256,12 +256,12 @@ export default function Main() {
         separate.unshift(...expansionCheckFront.docs);
         doc.totalDistance += expansionCheckFront.length;
       }
-      
+
       let merged = await merge(separate);
       const res = await combination(
         separate,
         merged,
-        expansionCheckFront.Name ,
+        expansionCheckFront.Name,
         expansionCheckEnd.Name
       );
 
@@ -278,8 +278,8 @@ export default function Main() {
       const DE = await calcDistance(
         To.lat,
         To.long,
-        polylineData[polylineData.length-1][1],
-        polylineData[polylineData.length-1][0]
+        polylineData[polylineData.length - 1][1],
+        polylineData[polylineData.length - 1][0]
       );
 
       placeStart.push(
@@ -342,7 +342,8 @@ export default function Main() {
       currentDistance: roadDistance[0],
       clicked: true,
       showPath: true,
-      isSidebarOpen: true,
+     // isSidebarOpen: true,
+      isRouteBottomSheetVisible: true,
       isdirectionVisible: false,
       placeSearchOn: true,
       isBottomSheetVisible: false,
@@ -352,7 +353,7 @@ export default function Main() {
       PlaceFrom: "",
     }));
 
-    toggleSidebar();
+   // toggleSidebar();
 
     mapRef.current?.animateCamera({
       center: {
@@ -365,19 +366,6 @@ export default function Main() {
     });
   };
 
-  const toggleSidebar = () => {
-    const newValue = state.isSidebarOpen ? -width : 0;
-    Animated.timing(sidebarAnimation, {
-      toValue: newValue,
-      duration: 300,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-    setState((prevState) => ({
-      ...prevState,
-      isSidebarOpen: !prevState.isSidebarOpen,
-    }));
-  };
   const handleRouteSelect = (index) => {
     const selectedDistance = state.roadDistance[index];
     setState((prevState) => ({
@@ -388,12 +376,11 @@ export default function Main() {
     }));
   };
 
-  
-
   const handleLayersPress = async () => {
     setState((prevState) => ({
       ...prevState,
       mapType: prevState.mapType === "standard" ? "hybrid" : "standard",
+      
     }));
   };
 
@@ -508,7 +495,8 @@ export default function Main() {
       roadDistance: [],
       currentDistance: null,
       track: false,
-      isSidebarOpen: false,
+     // isSidebarOpen: false,
+      isRouteBottomSheetVisible: false,
       isdirectionVisible: false,
       clicked: false,
       resultsFrom: [],
@@ -551,7 +539,6 @@ export default function Main() {
   }, [state.isdirectionVisible, state.isSearchModalVisible]);
 
   const getLongPressPlace = async (lat, long) => {
-    
     const res = await getPlaceDetails(lat, long);
     const r1 = {
       Name: res.display_name,
@@ -582,8 +569,8 @@ export default function Main() {
       placeStart: [],
       placeSearchOn: false,
       setSearchText: res.display_name,
-      
       isBottomSheetVisible: true,
+      isRouteBottomSheetVisible:false,
       SearchLocationCords: [lat, long],
       showSearchMarker: true,
     }));
@@ -632,6 +619,11 @@ export default function Main() {
               }))}
               strokeColor="#030370"
               strokeWidth={14}
+              tappable={true}
+              onPress={() => setState((prevState) => ({
+                ...prevState,
+                isRouteBottomSheetVisible: true,
+              }))}
             />
 
             <Polyline
@@ -641,6 +633,11 @@ export default function Main() {
               }))}
               strokeColor="#0000FF"
               strokeWidth={10}
+              tappable={true}
+              onPress={() => setState((prevState) => ({
+                ...prevState,
+                isRouteBottomSheetVisible: true,
+              }))}
             />
           </>
         )}
@@ -702,7 +699,7 @@ export default function Main() {
                 latitude: state.placeend[0][0],
                 longitude: state.placeend[0][1],
               }}
-              title={state.to?state.to.Name:""}
+              title={state.to ? state.to.Name : ""}
               draggable={true}
               onDragEnd={(e) => {
                 const { latitude, longitude } = e.nativeEvent.coordinate;
@@ -765,11 +762,7 @@ export default function Main() {
           elevation: 5,
         }}
       >
-        {state.clicked && (
-          <TouchableOpacity onPress={toggleSidebar} style={{ padding: 5 }}>
-            <Ionicons name="menu" size={24} color="black" />
-          </TouchableOpacity>
-        )}
+        
         <TouchableOpacity
           style={{
             flex: 1,
@@ -935,7 +928,7 @@ export default function Main() {
           <Ionicons name="close-sharp" size={34} color="black" />
         </TouchableOpacity>
       )}
-      
+
       <TouchableOpacity
         onPress={handleSearchViewOpen}
         style={{
@@ -951,45 +944,7 @@ export default function Main() {
         <MaterialIcons name="directions" size={34} color="white" />
       </TouchableOpacity>
 
-      <Animated.View
-        style={[
-          {
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "120%",
-            backgroundColor: "#c1d3fe",
-            elevation: 10,
-          },
-          sidebarStyle,
-        ]}
-      >
-        <TouchableOpacity
-          onPress={toggleSidebar}
-          style={{ position: "absolute", top: 40, right: 10, zIndex: 1 }}
-        >
-          <Ionicons name="close" size={24} color="black" />
-        </TouchableOpacity>
-        <View
-          style={{
-            flex: 1,
-            paddingTop: 40,
-            width: "100%",
-            paddingHorizontal: 5,
-            marginBottom: 0,
-          }}
-        >
-          {state.routeData.length > 0 && (
-            <RouteDisplay
-              routes={state.routeData}
-              selectedRouteIndex={state.selectedRouteIndex}
-              onRouteSelect={handleRouteSelect}
-              distance1={state.roadDistance}
-            />
-          )}
-        </View>
-      </Animated.View>
+      
       {state.isdirectionVisible && (
         <>
           <Direction
@@ -1039,6 +994,7 @@ export default function Main() {
               ...prevState,
               searchPlace: value,
               isBottomSheetVisible: true,
+              isRouteBottomSheetVisible:false,
               placeend: [],
               placeStart: [],
               placeSearchOn: false,
@@ -1055,217 +1011,260 @@ export default function Main() {
       )}
       {state.isBottomSheetVisible && (
         <BottomSheet
-        setIsBottomSheetVisible={(value) =>
-          setState((prevState) => ({
-            ...prevState,
-            isBottomSheetVisible: value,
-          }))
-        }
-        closeandclear={closeandclear}
-      >
-        <View style={{ padding: 10 }}>
-          <View style={{ marginTop: 20 }}>
+          setIsBottomSheetVisible={(value) =>
+            setState((prevState) => ({
+              ...prevState,
+              isBottomSheetVisible: value,
+            }))
+          }
+          closeandclear={closeandclear}
+        >
+          <View style={{ padding: 10 }}>
+            <View style={{ marginTop: 20 }}>
+              <Text
+                style={{
+                  fontFamily: "psemibold",
+                  fontSize: 17,
+                  marginBottom: 5,
+                }}
+              >
+                {state?.searchPlace.Name}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: "pm",
+                  fontSize: 15,
+                  marginBottom: 5,
+                }}
+              >
+                {state?.searchPlace.District}
+              </Text>
+            </View>
+
+            <View
+              style={{
+                height: 1,
+                width: "100%",
+                backgroundColor: "rgba(165, 170, 184, 0.5)",
+                marginBottom: 10,
+              }}
+            />
             <Text
               style={{
                 fontFamily: "psemibold",
                 fontSize: 17,
-                marginBottom: 5,
+                marginBottom: 10,
+                color: "rgba(169, 6, 87, 0.87)",
               }}
             >
-              {state?.searchPlace.Name}
+              Get Direction:
             </Text>
-            <Text
+            <View
               style={{
-                fontFamily: "pm",
-                fontSize: 15,
-                marginBottom: 5,
-              }}
-            >
-              {state?.searchPlace.District}
-            </Text>
-          </View>
-      
-          <View
-            style={{
-              height: 1,
-              width: "100%",
-              backgroundColor: "rgba(165, 170, 184, 0.5)",
-              marginBottom: 10,
-            }}
-          />
-          <Text
-            style={{
-              fontFamily: "psemibold",
-              fontSize: 17,
-              marginBottom: 10,
-              color: "rgba(169, 6, 87, 0.87)",
-            }}
-          >
-            Get Direction:
-          </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              marginBottom: 10,
-            }}
-          >
-            <TouchableOpacity
-              disabled={state.dirLoad}
-              onPress={() => {
-                setState((prevState) => ({
-                  ...prevState,
-                  isdirectionVisible: true,
-                  to: {
-                    Name: state.searchPlace.Name,
-                    lat: state.searchPlace.Latitude,
-                    long: state.searchPlace.Longitude,
-                  },
-                }));
-              }}
-              style={{
-                backgroundColor: "rgb(15, 169, 135)",
-                borderRadius: 30,
-                padding: 10,
                 flexDirection: "row",
-                justifyContent: "center",
-                alignItems: "center",
-                flex: 1,
-                marginRight: 5,
+                justifyContent: "space-between",
+                marginBottom: 10,
               }}
             >
-              <MaterialIcons name="directions" size={20} color="white" />
-              <Text
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                style={{ color: "white", marginLeft: 5, fontSize: 14 }}
-              >
-                From A Point
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              disabled={state.dirLoad}
-              onPress={async () => {
-                const res = await AskForLocationPermission();
-                if (res.error !== 103) {
-                  Toast.show({
-                    type: "error",
-                    text1: res.message,
-                  });
-                  setState((prevState) => ({ ...prevState, dirLoad: false }));
-                  return;
-                }
-                let currentLocation = await Location.getCurrentPositionAsync({});
-                if (!currentLocation) {
-                  Toast.show({
-                    type: "error",
-                    text1: "Please Turn on your Location",
-                  });
-                  return;
-                }
-      
-                getPath(
-                  {
-                    Name: "Your Location",
-                    lat: currentLocation?.coords.latitude,
-                    long: currentLocation?.coords.longitude,
-                  },
-                  {
-                    Name: state.searchPlace.Name,
-                    lat: state.searchPlace.Latitude,
-                    long: state.searchPlace.Longitude,
-                  }
-                );
-                setState((p) => ({
-                  ...p,
-                  from: {
-                    Name: "Your Location",
-                    lat: currentLocation?.coords.latitude,
-                    long: currentLocation?.coords.longitude,
-                  },
-                  to: {
-                    Name: state.searchPlace.Name,
-                    lat: state.searchPlace.Latitude,
-                    long: state.searchPlace.Longitude,
-                  },
-                }));
-              }}
-              style={{
-                backgroundColor: "rgb(15, 169, 135)",
-                borderRadius: 30,
-                padding: 10,
-                flexDirection: "row",
-                justifyContent: "center",
-                alignItems: "center",
-                flex: 1,
-                marginLeft: 5,
-              }}
-            >
-              <MaterialIcons name="my-location" size={20} color="white" />
-              <Text
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                style={{ color: "white", marginLeft: 5, fontSize: 14 }}
-              >
-                From My Location
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View
-            style={{
-              backgroundColor: "white",
-              padding: 10,
-              borderRadius: 12,
-              marginBottom: 10,
-            }}
-          >
-            {(state.searchPlace?.type&&state.searchPlace?.type!=="Yes") && (
-              <View
+              <TouchableOpacity
+                disabled={state.dirLoad}
+                onPress={() => {
+                  setState((prevState) => ({
+                    ...prevState,
+                    isdirectionVisible: true,
+                    to: {
+                      Name: state.searchPlace.Name,
+                      lat: state.searchPlace.Latitude,
+                      long: state.searchPlace.Longitude,
+                    },
+                  }));
+                }}
                 style={{
+                  backgroundColor: "rgb(15, 169, 135)",
+                  borderRadius: 30,
+                  padding: 10,
                   flexDirection: "row",
+                  justifyContent: "center",
                   alignItems: "center",
-                  marginBottom: 5,
+                  flex: 1,
+                  marginRight: 5,
                 }}
               >
-                <Text style={{ fontFamily: "pm", fontSize: 17 }}>Type: </Text>
-                <Text style={{ fontSize: 16, fontFamily: "pl" }}>
-                  {state.searchPlace.type.charAt(0).toUpperCase() +
-                    state.searchPlace.type.slice(1)}
-                </Text>
-              </View>
-            )}
-            {state.searchPlace?.area && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: 5,
-                }}
-              >
-                <Text style={{ fontFamily: "pm", fontSize: 17 }}>Area: </Text>
-                <Text style={{ fontSize: 16, fontFamily: "pl" }}>
-                  {state.searchPlace.area}
-                </Text>
-              </View>
-            )}
-            {state.searchPlace?.street && (
-              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                <Text style={{ fontFamily: "pm", fontSize: 17 }}>Street: </Text>
+                <MaterialIcons name="directions" size={20} color="white" />
                 <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={{ color: "white", marginLeft: 5, fontSize: 14 }}
+                >
+                  From A Point
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={state.dirLoad}
+                onPress={async () => {
+                  const res = await AskForLocationPermission();
+                  if (res.error !== 103) {
+                    Toast.show({
+                      type: "error",
+                      text1: res.message,
+                    });
+                    setState((prevState) => ({ ...prevState, dirLoad: false }));
+                    return;
+                  }
+                  let currentLocation = await Location.getCurrentPositionAsync(
+                    {}
+                  );
+                  if (!currentLocation) {
+                    Toast.show({
+                      type: "error",
+                      text1: "Please Turn on your Location",
+                    });
+                    return;
+                  }
+
+                  getPath(
+                    {
+                      Name: "Your Location",
+                      lat: currentLocation?.coords.latitude,
+                      long: currentLocation?.coords.longitude,
+                    },
+                    {
+                      Name: state.searchPlace.Name,
+                      lat: state.searchPlace.Latitude,
+                      long: state.searchPlace.Longitude,
+                    }
+                  );
+                  setState((p) => ({
+                    ...p,
+                    from: {
+                      Name: "Your Location",
+                      lat: currentLocation?.coords.latitude,
+                      long: currentLocation?.coords.longitude,
+                    },
+                    to: {
+                      Name: state.searchPlace.Name,
+                      lat: state.searchPlace.Latitude,
+                      long: state.searchPlace.Longitude,
+                    },
+                  }));
+                }}
+                style={{
+                  backgroundColor: "rgb(15, 169, 135)",
+                  borderRadius: 30,
+                  padding: 10,
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  flex: 1,
+                  marginLeft: 5,
+                }}
+              >
+                <MaterialIcons name="my-location" size={20} color="white" />
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={{ color: "white", marginLeft: 5, fontSize: 14 }}
+                >
+                  From My Location
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View
+              style={{
+                backgroundColor: "white",
+                padding: 10,
+                borderRadius: 12,
+                marginBottom: 10,
+              }}
+            >
+              {state.searchPlace?.type && state.searchPlace?.type !== "Yes" && (
+                <View
                   style={{
-                    fontSize: 16,
-                    fontFamily: "pl",
-                    flex: 1,
-                    flexWrap: "wrap",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 5,
                   }}
                 >
-                  {state.searchPlace.street}
-                </Text>
-              </View>
-            )}
+                  <Text style={{ fontFamily: "pm", fontSize: 17 }}>Type: </Text>
+                  <Text style={{ fontSize: 16, fontFamily: "pl" }}>
+                    {state.searchPlace.type.charAt(0).toUpperCase() +
+                      state.searchPlace.type.slice(1)}
+                  </Text>
+                </View>
+              )}
+              {state.searchPlace?.area && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 5,
+                  }}
+                >
+                  <Text style={{ fontFamily: "pm", fontSize: 17 }}>Area: </Text>
+                  <Text style={{ fontSize: 16, fontFamily: "pl" }}>
+                    {state.searchPlace.area}
+                  </Text>
+                </View>
+              )}
+              {state.searchPlace?.street && (
+                <View
+                  style={{ flexDirection: "row", alignItems: "flex-start" }}
+                >
+                  <Text style={{ fontFamily: "pm", fontSize: 17 }}>
+                    Street:{" "}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontFamily: "pl",
+                      flex: 1,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {state.searchPlace.street}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </BottomSheet>
+        </BottomSheet>
+      )}
+      {state.isRouteBottomSheetVisible && (
+        <RouteBottomSheet
+        setIsBottomSheetVisible={(value) =>
+          setState((prevState) => ({
+            ...prevState,
+            isRouteBottomSheetVisible: value,
+          }))
+        }
+        closeandclear={()=>{
+          setState((prevState) => ({
+            ...prevState,
+            isRouteBottomSheetVisible: false,
+          }));
+
+        }}
+        >
+        <View
+          style={{
+            flex: 1,
+            paddingTop: 40,
+            width: "100%",
+            height: "120%",
+            paddingHorizontal: 5,
+            marginBottom: 0,
+          }}
+        >
+          {state.routeData.length > 0 && (
+            <RouteDisplay
+              routes={state.routeData}
+              selectedRouteIndex={state.selectedRouteIndex}
+              onRouteSelect={handleRouteSelect}
+              distance1={state.roadDistance}
+            />
+          )}
+        </View> 
+        </RouteBottomSheet>
       )}
       <Toast />
     </View>

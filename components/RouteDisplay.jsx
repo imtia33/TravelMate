@@ -439,7 +439,6 @@ const RouteDisplay = ({
       style={{
         flex: 1,
         backgroundColor: "#c1d3fe",
-        marginBottom: 100,
       }}
     >
       {/* Main Route Selection */}
