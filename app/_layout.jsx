@@ -60,7 +60,6 @@ const RootLayout = () => {
   );
 };
 const createDbIfNeeded = async (db) => {
-  console.log("Creating database");
   try {
     await db.execAsync(
       `PRAGMA journal_mode = 'wal';
@@ -78,7 +77,6 @@ const createDbIfNeeded = async (db) => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         "Name" TEXT NOT NULL,
         "Coordinates" TEXT,
-        "Coordinates2" TEXT,
         "single" BOOLEAN,
         "OSM" BOOLEAN,
         "District" TEXT
@@ -93,7 +91,6 @@ const createDbIfNeeded = async (db) => {
       
       `
     );
-    console.log("Database created");
   } catch (error) {
     console.error("Error creating database:", error);
   }
