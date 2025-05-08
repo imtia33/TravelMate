@@ -154,4 +154,3 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 
 ---
 
-Made by [Imtiaz Royhan](https://github.com/imtia33).
