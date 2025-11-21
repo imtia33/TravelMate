@@ -1,15 +1,18 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, Dimensions, Image, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, Dimensions, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { Link, useRouter } from "expo-router";
 import Toast from "react-native-toast-message";
 import { images } from "../../constants";
-import { CustomButton, FormField } from "../../components";
+import { CustomButton, FormField, ThemeToggleButton } from "../../components";
 import { getCurrentUser, signIn, sendMail, checklastrecoveryMail } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTheme } from "../../context/ThemeProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { COLORS } from "../../constants/theme";
 
 const SignIn = () => {
   const { setUser, setIsLogged } = useGlobalContext();
+  const { isDarkMode } = useTheme();
   const router = useRouter();
   const [isSubmitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -17,6 +20,51 @@ const SignIn = () => {
     password: "",
   });
   const [forgotPasswordCooldown, setForgotPasswordCooldown] = useState(false);
+
+  // Define themed styles using global colors
+  const themedStyles = StyleSheet.create({
+    container: {
+      backgroundColor: isDarkMode ? COLORS.dark.background : COLORS.light.background,
+      height: '100%'
+    },
+    innerContainer: {
+      width: '100%',
+      justifyContent: 'center',
+      height: '100%',
+      paddingHorizontal: 16,
+      marginVertical: 24,
+      minHeight: Dimensions.get("window").height - 100,
+    },
+    title: {
+      fontSize: 50,
+      fontFamily: 'Kode-mono',
+      alignSelf: 'center',
+      color: isDarkMode ? COLORS.dark.text : COLORS.light.text
+    },
+    linkText: {
+      fontSize: 18,
+      fontFamily: 'Outfit-Medium',
+      color: isDarkMode ? COLORS.dark.primary : COLORS.light.primary
+    },
+    signupText: {
+      fontSize: 18,
+      fontFamily: 'Outfit-Medium',
+      color: isDarkMode ? COLORS.dark.text : COLORS.light.text
+    },
+    signupLink: {
+      fontSize: 18,
+      fontFamily: 'Outfit-Medium',
+      color: '#5E61EE' // Keeping red for the signup link
+    },
+    forgotPasswordText: {
+      fontFamily: 'Outfit-Regular',
+      color: isDarkMode ? COLORS.dark.text : COLORS.light.text,
+      opacity: 0.9,
+      alignSelf: 'center',
+      fontSize:15,
+      marginBottom:10
+    }
+  });
 
   const submit = async () => {
     if (form.email === "" || form.password === "") {
@@ -133,27 +181,16 @@ const SignIn = () => {
   };
 
   return (
-    <SafeAreaView style={{ backgroundColor: '#d1d9ed', height: '100%' }}>
+    <SafeAreaView style={themedStyles.container}>
       <ScrollView>
-        <View
-          style={{
-            width: '100%',
-            justifyContent: 'center',
-            height: '100%',
-            paddingHorizontal: 16,
-            marginVertical: 24,
-            minHeight: Dimensions.get("window").height - 100,
-          }}
-        >
-          <View
-            style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',left:'10%' }}
-          >
+        <View style={{position:'absolute', alignSelf:'flex-end'}}>
+          <ThemeToggleButton />
+        </View>
+        <View style={themedStyles.innerContainer}>
+          <View >
+            <Text style={[themedStyles.title, { bottom: 50 }]}>TravX</Text>
             
-            <Text style={{ fontFamily: 'MS', fontSize: 106,width: 140,height: 140,bottom:15}}>T</Text>
-            <Text style={{ fontFamily: 'CV', fontSize: 58,width:80,right:50 }}>rav</Text>
-            <Text style={{ fontFamily: 'DS', fontSize: 106,right:70,bottom:15 }}>X</Text>
           </View>
-
           <FormField
             title="Email"
             value={form.email}
@@ -170,30 +207,34 @@ const SignIn = () => {
             otherStyles="mt-2"
             placeholder={"Password"}
           />
-
+          <View style={{ justifyContent: 'flex-end', flexDirection: 'row' }}>
+            <TouchableOpacity onPress={handleForgotPassword}
+            disabled={forgotPasswordCooldown}
+            >
+              <Text style={themedStyles.forgotPasswordText}>
+                Forgot Password?
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <View
+            style={{ justifyContent: 'center', paddingTop: 12, flexDirection: 'row', gap: 8 }}
+          >
           <CustomButton
+           
             title="Sign In"
             handlePress={submit}
             containerStyles="mt-7"
             isLoading={isSubmitting}
           />
-
-          <View style={{ justifyContent: 'center', paddingTop: 12, flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity onPress={handleForgotPassword}
-            disabled={forgotPasswordCooldown}
-            >
-              <Text style={{ fontFamily: 'psemibold', color: '#1E90FF', alignSelf: 'center' }}>
-                Forgot Password?
-              </Text>
-            </TouchableOpacity>
           </View>
+          
           <View style={{ justifyContent: 'center', paddingTop: 12, flexDirection: 'row', gap: 8 }}>
-            <Text style={{ fontSize: 18, fontFamily: 'psemibold' }}>
+            <Text style={themedStyles.signupText}>
               Don't have an account?
             </Text>
             <Link
               href="/sign-up"
-              style={{ fontSize: 18, fontFamily: 'psemibold', color: '#FF0000' }}
+              style={themedStyles.signupLink}
             >
               Signup
             </Link>
