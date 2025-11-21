@@ -31,9 +31,11 @@ import MapView, {
 import {
   Ionicons,
   MaterialIcons,
+  FontAwesome5,
 } from "@expo/vector-icons";
 import RouteDisplay from "../../components/RouteDisplay";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTheme } from "../../context/ThemeProvider";
 import * as Location from "expo-location";
 import Toast from "react-native-toast-message";
 import {
@@ -54,41 +56,52 @@ import {
 import Direction from "../../components/Direction";
 import SearchModal from "../../components/SearchModal";
 import BottomSheet from "../../components/BottomSheet";
+import HistoryPicker from "../../components/HomeComponents/HistoryPicker";
 const { width, height } = Dimensions.get("window");
 import { getPlaceDetails } from "../../lib/appwrite";
 import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import RouteBottomSheet from "../../components/RouteBottomSheet";
 import PlaceDirection from "../../components/PlaceDirection";
-import { icons } from "../../constants";
+import { icons, COLORS } from "../../constants";
+import { savePlace } from "../../lib/savePlaces";
+
 export default function Main() {
-  const { data } = useLocalSearchParams();
+  const { data, search } = useLocalSearchParams();
   let place = useMemo(() => (data ? JSON.parse(data) : null), [data]);
+  
+  // Get context values
+  const { user, setHistoryPlaces, setRecentPlaces, historyPlaces } = useGlobalContext();
+  const { isDarkMode } = useTheme();
 
   useFocusEffect(
     useCallback(() => {
       if (place) {
+        // Ensure we have the correct property names for coordinates
+        const lat = place.Lat || place.lat || place.Latitude;
+        const long = place.Long || place.long || place.Longitude;
+        
         setState((prevState) => ({
           ...prevState,
           isBottomSheetVisible: true,
-          SearchLocationCords: [place.Lat, place.Long],
+          SearchLocationCords: [lat, long],
           showSearchMarker: true,
           searchPlace: {
-            Name: place.name,
-            District: place.location,
-            Latitude: place.Lat,
-            Longitude: place.Long,
+            Name: place.name || place.Name,
+            District: place.District || place.location || place.district || '',
+            Latitude: lat,
+            Longitude: long,
           },
           placeend: [],
           placeStart: [],
           placeSearchOn: false,
-          searchText: place.name,
+          searchText: place.name || place.Name,
         }));
 
         mapRef.current?.animateCamera(
           {
             center: {
-              latitude: place.Lat,
-              longitude: place.Long,
+              latitude: lat,
+              longitude: long,
             },
             pitch: 0,
             heading: 0,
@@ -99,8 +112,19 @@ export default function Main() {
       }
     }, [place])
   );
-
-  const { user } = useGlobalContext();
+  
+  // Check if we should open the search modal when the screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      // If search parameter is 'true', open the search modal
+      if (search === 'true') {
+        setState((prevState) => ({
+          ...prevState,
+          isSearchModalVisible: true,
+        }));
+      }
+    }, [search])
+  );
 
   const [state, setState] = useState({
     routeData: [],
@@ -549,6 +573,14 @@ export default function Main() {
       street: res.street,
       type: res.type,
     };
+    
+    // Save the place as history when long pressed on map
+    try {
+      await savePlace(r1, 'history', null, setHistoryPlaces);
+    } catch (error) {
+      console.error("Error saving place as history:", error);
+    }
+    
     setState((prevState) => ({ ...prevState, searchPlace: r1 }));
     mapRef.current?.animateCamera(
       {
@@ -754,23 +786,17 @@ export default function Main() {
           left: 10,
           right: 10,
           height: 50,
-          backgroundColor: "#c1d3fe",
-          borderRadius: 25,
+          backgroundColor: isDarkMode ? '#1A1A1A' : '#BABABA',
+          borderRadius: 16,
           flexDirection: "row",
           alignItems: "center",
-          paddingHorizontal: 10,
+          justifyContent: "space-between",
+          paddingHorizontal: 12,
           elevation: 5,
         }}
       >
-        
-        <TouchableOpacity
-          style={{
-            flex: 1,
-            height: 40,
-            marginLeft: 10,
-            fontSize: 16,
-            justifyContent: "center",
-          }}
+        <TouchableOpacity 
+          style={{flexDirection: "row", alignItems: "center", flex: 1}}
           onPress={() => {
             setState((prevState) => ({
               ...prevState,
@@ -779,32 +805,103 @@ export default function Main() {
             }));
           }}
         >
+          <Image 
+            source={isDarkMode ? icons.searchLight : icons.searchDark} 
+            style={{
+              width: 20,
+              height: 20,
+            }}
+            resizeMode="contain"
+          />
           {state.searchText.length > 0 ? (
-            <Text style={{ color: "#000" }}>{state.searchText}</Text>
+            <Text 
+              style={{
+                color: isDarkMode ? '#FFFFFF' : '#000000',
+                fontSize: 18,
+                fontFamily: "Outfit-Regular",
+                marginLeft: 10
+              }}
+            >
+              {state.searchText}
+            </Text>
           ) : (
             <Text
               style={{
-                color: "rgba(2, 1, 1, 0.8)",
-                fontFamily: "pm",
-                fontSize: 20,
-                top: 2,
+                color: isDarkMode ? "#8F8F8F" : "#3B3B3B",
+                fontSize: 18,
+                fontFamily: "Outfit-Regular",
+                marginLeft: 10
               }}
             >
-              Search here
+              Where To?
             </Text>
           )}
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            setState((prevState) => ({
-              ...prevState,
-              isSearchModalVisible: true,
-            }));
-          }}
-          style={{ padding: 5 }}
-        >
-          <Ionicons name="search" size={30} color="rgba(10, 9, 9, 0.73)" />
-        </TouchableOpacity>
+        
+        {historyPlaces.length > 0 && (
+          <HistoryPicker 
+            data={historyPlaces} 
+            onSelect={(place) => {
+              // Handle place selection by updating state and showing bottom sheet
+              setState((prevState) => ({
+                ...prevState,
+                searchPlace: place,
+                SearchLocationCords: [place.Lat || place.latitude, place.Long || place.longitude],
+                showSearchMarker: true,
+                searchText: place.name,
+                isBottomSheetVisible: true,
+                isRouteBottomSheetVisible: false,
+                placeend: [],
+                placeStart: [],
+                placeSearchOn: false,
+              }));
+              
+              mapRef.current?.animateCamera(
+                {
+                  center: {
+                    latitude: place.Lat || place.latitude,
+                    longitude: place.Long || place.longitude,
+                  },
+                  pitch: 0,
+                  heading: 0,
+                  zoom: 15,
+                },
+                { duration: 500 }
+              );
+            }} 
+            placeholder="History"
+            title="Pick a Place"
+            TriggerComponent={({ isVisible, setIsVisible, selectedItem, placeholder }) => (
+              <TouchableOpacity
+                onPress={() => setIsVisible(true)}
+                style={{
+                  backgroundColor: isDarkMode ? '#E0E0E0' : '#8B8B8B',
+                  height: 35,
+                  borderRadius: 18,
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  width: 90, 
+                }}
+              >
+                <FontAwesome5 
+                  name="history" 
+                  size={18} 
+                  color={isDarkMode ? '#000000' : '#000000'} 
+                  style={{marginRight: 5}} 
+                />
+                <Text style={{ 
+                  color: isDarkMode ? '#000000' : '#000000',
+                  fontSize: 15,
+                  fontFamily: "Outfit-Regular",
+                }}>
+                  {placeholder}
+                </Text>
+              </TouchableOpacity>
+            )}
+            isDarkMode={isDarkMode}
+          />
+        )}
       </View>
       {!state.UrlTile && (
         <TouchableOpacity
@@ -1007,6 +1104,8 @@ export default function Main() {
             }))
           }
           bbox={user.bbox}
+          savePlace={savePlace} // Pass savePlace function
+          setRecentPlaces={setRecentPlaces} // Pass setRecentPlaces function
         />
       )}
       {state.isBottomSheetVisible && (
@@ -1028,7 +1127,7 @@ export default function Main() {
                   marginBottom: 5,
                 }}
               >
-                {state?.searchPlace.Name}
+                {state?.searchPlace.Name || state?.searchPlace.name}
               </Text>
               <Text
                 style={{
