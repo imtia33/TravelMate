@@ -20,10 +20,6 @@ const RootLayout = () => {
     "MS": require("../assets/fonts/MySoul.ttf"),
     "CV": require("../assets/fonts/Caveat.ttf"),
     "DS": require("../assets/fonts/DancingScript.ttf"),
-    "Kode-mono": require("../assets/fonts/KodeMono.ttf"),
-    "KodeMono-Bold": require("../assets/fonts/KodeMono-Bold.ttf"),
-    "Outfit-Medium": require("../assets/fonts/Outfit-Medium.ttf"),
-    "Outfit-Regular": require("../assets/fonts/Outfit-Regular.ttf"),
   });
 
   useEffect(() => {
@@ -54,13 +50,11 @@ const RootLayout = () => {
       <Stack >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="advertisement" options={{ headerShown: false }} />
-        <Stack.Screen name="travelplaces" options={{ headerShown: false,animation:'slide_from_bottom' }} />
+        <Stack.Screen name="travelplaces" options={{ headerShown: false }} />
         <Stack.Screen name="verifying" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false, }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false,animation:'fade_from_bottom' }} />
-      
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       </Stack>
-      
     </GlobalProvider>
     </SQLiteProvider>
   );
@@ -93,15 +87,6 @@ const createDbIfNeeded = async (db) => {
         farePKM REAL,
         fareMin REAL,
         fareFixed REAL
-      );
-      
-      CREATE TABLE IF NOT EXISTS saved_places (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        street TEXT,
-        lat REAL,
-        long REAL,
-        category TEXT NOT NULL
       );
       
       `

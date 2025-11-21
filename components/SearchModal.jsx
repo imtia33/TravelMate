@@ -25,8 +25,6 @@ const SearchModal = ({
   setsearchPlace,
   onClose,
   bbox,
-  savePlace, // Added prop for savePlace function
-  setRecentPlaces // Added prop for setRecentPlaces function
 }) => {
   const [animation] = useState(new Animated.Value(0))
   const [results, setResults] = useState([])
@@ -109,7 +107,7 @@ const SearchModal = ({
     return () => clearTimeout(timeoutId)
   }, [searchText, handleSearch])
 
-  const handleResultSelect = async (item) => {
+  const handleResultSelect = (item) => {
     try {
       // Update search text with selected location name
       setSearchText(item.Name)
@@ -117,15 +115,6 @@ const SearchModal = ({
       // Update search place if setter is provided
       if (setsearchPlace) {
         setsearchPlace(item)
-      }
-
-      // Save the place as recent when searched
-      if (savePlace && setRecentPlaces) {
-        try {
-          await savePlace(item, 'recent', setRecentPlaces, null);
-        } catch (error) {
-          console.error("Error saving place as recent:", error);
-        }
       }
 
       // Update coordinates for the map
@@ -149,6 +138,8 @@ const SearchModal = ({
 
       // Show marker on the map
       setShowSearchMarker(true)
+
+      
 
       // Close the modal
       handleClose()

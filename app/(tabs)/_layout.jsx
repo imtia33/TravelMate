@@ -1,175 +1,73 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { View, Pressable, Dimensions, Keyboard, Platform, Animated, Image } from "react-native"
+import { View, Pressable, Dimensions, Keyboard, Platform, Animated } from "react-native"
 import { Tabs } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import * as Animatable from "react-native-animatable"
 import { StatusBar } from "expo-status-bar"
-import { useTheme } from "../../context/ThemeProvider"
-import { COLORS } from "../../constants/theme"
-import { icons } from "../../constants"
 
 const { width } = Dimensions.get("window")
 const PADDING = 20
 const TAB_BAR_WIDTH = width - 2 * PADDING
-const TAB_WIDTH = TAB_BAR_WIDTH / 2
+const TAB_WIDTH = TAB_BAR_WIDTH / 2 // Only two tabs now
 
-const TabIcon = ({ icon, name, focused, isDarkMode, isRouteTab }) => {
-  // Text color - white in dark mode, dark in light mode
-  const textColor = isDarkMode ? "#FFFFFF" : "#19191D";
-  
-  // Use custom images for home and map icons
-  if (name === "home") {
-    return (
-      <View style={{ alignItems: "center", justifyContent: "center", width: TAB_WIDTH }}>
-        <Image 
-          source={isDarkMode ? icons.homeLight : icons.homeDark} 
-          style={{ 
-            width: 28, 
-            height: 28
-          }} 
-        />
-        <Animatable.Text
-          animation={focused ? "fadeIn" : "fadeOut"}
-          duration={200}
-          style={{
-            marginTop: 2,
-            fontSize: 10,
-            fontWeight: "bold",
-            color: textColor,
-          }}
-        >
-          {name.charAt(0).toUpperCase() + name.slice(1)}
-        </Animatable.Text>
-        {/* Active indicator line */}
-        {focused && (
-          <View 
-            style={{
-              position: 'absolute',
-              bottom: -2,
-              width: 20,
-              height: 3,
-              backgroundColor: isDarkMode && isRouteTab ? "#E0E0E0" : "#F02E65",
-              borderRadius: 2
-            }} 
-          />
-        )}
-      </View>
-    );
-  } else if (name === "route") {
-    return (
-      <View style={{ alignItems: "center", justifyContent: "center", width: TAB_WIDTH }}>
-        <Image 
-          source={icons.map} 
-          style={{ 
-            width: 28, 
-            height: 28
-          }} 
-        />
-        <Animatable.Text
-          animation={focused ? "fadeIn" : "fadeOut"}
-          duration={200}
-          style={{
-            marginTop: 2,
-            fontSize: 10,
-            fontWeight: "bold",
-            color: textColor,
-          }}
-        >
-          {name.charAt(0).toUpperCase() + name.slice(1)}
-        </Animatable.Text>
-        {/* Active indicator line */}
-        {focused && (
-          <View 
-            style={{
-              position: 'absolute',
-              bottom:-3,
-              width: 20,
-              height: 3,
-              backgroundColor: "#F02E65",
-              borderRadius: 2
-            }} 
-          />
-        )}
-      </View>
-    );
-  }
-  
-  // Fallback to Ionicons if needed (shouldn't happen with current setup)
-  const activeColor = focused ? "#F02E65" : textColor;
+const TabIcon = ({ icon, color, name, focused }) => {
   return (
     <Animatable.View
       animation={focused ? "bounceIn" : "fadeIn"}
-      duration={300}
+      duration={400}
       style={{ alignItems: "center", justifyContent: "center", width: TAB_WIDTH }}
     >
-      <Ionicons name={icon} size={24} color={activeColor} />
+      <Ionicons name={icon} size={24} color={color} style={{ marginBottom: 3 }} />
       <Animatable.Text
         animation={focused ? "fadeIn" : "fadeOut"}
-        duration={200}
-        style={{
-          marginTop: 2,
-          fontSize: 10,
-          fontWeight: "bold",
-          color: textColor,
-        }}
+        duration={300}
+        style={{ fontSize: 10, fontWeight: "bold", marginTop: 2, color }}
       >
         {name.charAt(0).toUpperCase() + name.slice(1)}
       </Animatable.Text>
-      {/* Active indicator line */}
-      {focused && (
-        <View 
-          style={{
-            position: 'absolute',
-            bottom: -10,
-            width: 20,
-            height: 3,
-            backgroundColor: isDarkMode && isRouteTab ? "#E0E0E0" : "#F02E65",
-            borderRadius: 2
-          }} 
-        />
-      )}
     </Animatable.View>
   )
 }
 
 const CustomTabBar = ({ state, descriptors, navigation, isKeyboardVisible }) => {
-  const heightAnim = React.useRef(new Animated.Value(60)).current
-  const { isDarkMode } = useTheme()
-  
-  // Determine if we're on the route tab
-  const isRouteTab = state.routes[state.index]?.name === "route";
+  // Create an animated value for the tab bar height
+  const [tabBarHeight] = React.useState(new Animated.Value(60))
 
-  useEffect(() => {
-    Animated.timing(heightAnim, {
+  // Update the animation when keyboard visibility changes
+  React.useEffect(() => {
+    Animated.timing(tabBarHeight, {
       toValue: isKeyboardVisible ? 0 : 60,
-      duration: 220,
+      duration: 250,
       useNativeDriver: false,
     }).start()
   }, [isKeyboardVisible])
 
-  if (isKeyboardVisible) {
+  // If keyboard is visible and animation is complete, don't render the tab bar at all
+  if (isKeyboardVisible && tabBarHeight.__getValue() === 0) {
     return null
   }
 
   return (
     <Animated.View
       style={{
+        bottom: 0,
         width: "100%",
-        height: heightAnim,
+        height: tabBarHeight,
+        borderTopLeftRadius: 10,
+        borderTopRightRadius: 10,
+        overflow: "hidden",
         flexDirection: "row",
-        backgroundColor: isDarkMode ? COLORS.dark.background : COLORS.light.background,
         alignItems: "center",
         justifyContent: "space-around",
-        borderTopWidth:0.5,
-        borderColor:"#EDEDF0"
+        backgroundColor: "#EDEDF0",
       }}
     >
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key]
         const isFocused = state.index === index
-        
+
         const onPress = () => {
           const event = navigation.emit({
             type: "tabPress",
@@ -191,15 +89,10 @@ const CustomTabBar = ({ state, descriptors, navigation, isKeyboardVisible }) => 
               alignItems: "center",
               justifyContent: "center",
               height: "100%",
-              android_ripple: { color: "rgba(0,0,0,0.1)", borderless: true },
+              android_ripple: { color: "rgba(0, 0, 0, 0.1)", borderless: true },
             }}
           >
-            {options.tabBarIcon({
-              focused: isFocused,
-              // Pass additional props for custom icon handling
-              isDarkMode: isDarkMode,
-              isRouteTab: route.name === "route" && isRouteTab
-            })}
+            {options.tabBarIcon({ focused: isFocused, color: isFocused ? "#F02E65" : "#19191D", size: 24 })}
           </Pressable>
         )
       })}
@@ -208,23 +101,29 @@ const CustomTabBar = ({ state, descriptors, navigation, isKeyboardVisible }) => 
 }
 
 export default function TabLayout() {
+  // Add state to track keyboard visibility
   const [isKeyboardVisible, setKeyboardVisible] = useState(false)
-  const { isDarkMode } = useTheme()
-  const [focusedRoute, setFocusedRoute] = useState("home") // Track focused route
 
+  // Set up keyboard listeners
   useEffect(() => {
-    const show = Keyboard.addListener(
+    const keyboardShowListener = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      () => setKeyboardVisible(true),
-    )
-    const hide = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardVisible(false),
+      () => {
+        setKeyboardVisible(true)
+      },
     )
 
+    const keyboardHideListener = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false)
+      },
+    )
+
+    // Clean up listeners on component unmount
     return () => {
-      show.remove()
-      hide.remove()
+      keyboardShowListener.remove()
+      keyboardHideListener.remove()
     }
   }, [])
 
@@ -233,44 +132,30 @@ export default function TabLayout() {
       <Tabs
         tabBar={(props) => <CustomTabBar {...props} isKeyboardVisible={isKeyboardVisible} />}
         screenOptions={({ route }) => ({
-          headerShown: false,
-          lazy: false,
-          tabBarIcon: ({ focused }) => { // Removed color parameter since we're using custom images
-            let icon
+          tabBarIcon: ({ focused, color }) => {
+            let iconName
 
-            if (route.name === "home") {
-              icon = focused ? "home" : "home-outline"
-            } else if (route.name === "route") {
-              icon = focused ? "map-sharp" : "map-outline"
+            switch (route.name) {
+              case "home":
+                iconName = focused ? "home" : "home-outline"
+                break
+              case "route":
+                iconName = focused ? "map-sharp" : "map-outline"
+                break
+              default:
+                iconName = "home"
             }
 
-            return <TabIcon 
-              icon={icon} 
-              name={route.name} 
-              focused={focused} 
-              isDarkMode={isDarkMode}
-              isRouteTab={route.name === "route" && focusedRoute === "route"}
-            />
+            return <TabIcon icon={iconName} color={color} name={route.name} focused={focused} />
           },
-          
+          headerShown: false,
+          lazy: false,
         })}
-        // Track focused route
-        screenListeners={{
-          state: (e) => {
-            const routeName = e.data.state.routes[e.data.state.index].name;
-            setFocusedRoute(routeName);
-          }
-        }}
       >
-        <Tabs.Screen options={{animation:'shift'}}  name="home" />
-        <Tabs.Screen options={{animation:'shift'}} name="route" />
+        <Tabs.Screen name="home" />
+        <Tabs.Screen name="route" />
       </Tabs>
-
-      <StatusBar
-        style={isDarkMode ? "light" : "dark"}
-        backgroundColor={isDarkMode ? COLORS.dark.background : COLORS.light.background}
-        animated
-      />
+      <StatusBar backgroundColor="" style="dark" />
     </View>
   )
 }
