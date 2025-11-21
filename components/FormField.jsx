@@ -1,9 +1,7 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Animated } from "react-native";
 
 import { icons } from "../constants";
-import { useTheme } from "../context/ThemeProvider";
-import { COLORS } from "../constants/theme";
 
 const FormField = ({
   title,
@@ -15,109 +13,125 @@ const FormField = ({
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-  const { isDarkMode } = useTheme();
+  const animatedBorderColor = useState(new Animated.Value(0))[0];
 
   const isPassword = title === "Password" || title === "Retype password";
   const isEmail = title === "Email";
 
   const handleFocus = () => {
     setIsFocused(true);
+    Animated.timing(animatedBorderColor, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
   };
 
   const handleBlur = () => {
     setIsFocused(false);
+    Animated.timing(animatedBorderColor, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
   };
 
-  // Theme-based styles
-  const themeColors = isDarkMode ? COLORS.dark : COLORS.light;
-  
-  const themedStyles = StyleSheet.create({
-    container: {
-      marginBottom: 16,
-    },
-    label: {
-      fontSize: 16,
-      fontFamily: 'Outfit-Medium',
-      marginBottom: 8,
-      color: themeColors.text,
-    },
-    inputContainer: {
-      width: '100%',
-      height: 56,
-      paddingHorizontal: 16,
-      backgroundColor: themeColors.inputBackground,
-      borderWidth: 1,
-      borderColor: isFocused ? themeColors.inputBorderFocus : themeColors.inputBorder,
-      borderRadius: 10,
-      flexDirection: 'row',
-      alignItems: 'center',
-      shadowColor: isDarkMode ? '#000' : '#000',
-      shadowOffset: {
-        width: 0,
-        height: 1,
-      },
-      shadowOpacity: isDarkMode ? 0.3 : 0.05,
-      shadowRadius: 2,
-      elevation: 1,
-    },
-    input: {
-      flex: 1,
-      color: themeColors.text,
-      fontFamily: 'Outfit-Medium',
-      fontSize: 16,
-      minHeight: 40,
-      maxHeight: 100,
-    },
-    iconContainer: {
-      marginLeft: 8,
-    },
-    icon: {
-      width: 24,
-      height: 24,
-      tintColor: themeColors.icon, // This will color the icons based on theme
-    },
+  const borderColor = animatedBorderColor.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgb(0, 0, 0)', 'rgb(5, 134, 144)FF'],
   });
 
   return (
-    <View style={[themedStyles.container, otherStyles]}>
-      <Text style={themedStyles.label}>{title}</Text>
-      <View style={[
-        themedStyles.inputContainer,
-        isFocused && { borderColor: themeColors.inputBorderFocus }
+    <View style={[styles.container, otherStyles]}>
+      <Text  style={styles.label}>{title}</Text>
+      <Animated.View style={[
+        styles.inputContainer,
+        { 
+          borderBottomColor: borderColor, // black with full opacity
+          borderTopColor: 'rgb(63, 63, 63)', // black with full opacity
+          borderLeftColor: 'rgb(63, 63, 63)', // black with full opacity
+          borderRightColor: borderColor, },
+        isFocused && styles.inputContainerFocused
       ]}>
         <TextInput
-          style={themedStyles.input}
+          style={styles.input}
           value={value}
           placeholder={placeholder}
-          placeholderTextColor={themeColors.placeholder}
+          placeholderTextColor="#7B7B8B"
           onChangeText={handleChangeText}
           onFocus={handleFocus}
           onBlur={handleBlur}
           secureTextEntry={isPassword && !showPassword}
-          editable={props.editable !== false}
           {...props}
         />
         {isPassword && (
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={themedStyles.iconContainer}>
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.iconContainer}>
             <Image
               source={!showPassword ? icons.eyeHide : icons.eye}
-              style={themedStyles.icon}
+              style={styles.icon}
               resizeMode="contain"
             />
           </TouchableOpacity>
         )}
         {isEmail && (
-          <View style={themedStyles.iconContainer}>
+          <View style={styles.iconContainer}>
             <Image
               source={icons.email}
-              style={themedStyles.icon}
+              style={styles.icon}
               resizeMode="contain"
             />
           </View>
         )}
-      </View>
+      </Animated.View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 16,
+    fontFamily: 'psemibold',
+    marginBottom: 8,
+    color: '#000',
+  },
+  inputContainer: {
+    width: '100%',
+    height: 56,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 4,
+    borderTopWidth: 1.8,
+    borderLeftWidth: 1.8,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgb(0, 0, 0)', // black with full opacity
+    borderTopColor: 'rgb(100, 100, 100)', // black with full opacity
+    borderLeftColor: 'rgb(100, 100, 100)', // black with full opacity
+    borderRightColor: 'rgba(0, 0, 0, 1)', // black with full opacity
+    borderRadius: 20, // sharp edges
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inputContainerFocused: {
+    backgroundColor: '#fff',
+  },
+  input: {
+    flex: 1,
+    color: '#333',
+    fontFamily: 'pl',
+    fontSize: 16,
+    minHeight: 40,
+    maxHeight: 100,
+  },
+  iconContainer: {
+    marginLeft: 8,
+  },
+  icon: {
+    width: 24,
+    height: 24,
+  },
+});
 
 export default FormField;
