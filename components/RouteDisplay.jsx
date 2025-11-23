@@ -125,11 +125,7 @@ const RouteDisplay = ({
             }}
           >
             <View style={{ alignItems: "center" }}>
-              <MaterialCommunityIcons
-                name="speedometer"
-                size={24}
-                color="black"
-              />
+              <FontAwesome6 name="road" size={24} color="black" />
               <Text style={{ fontSize: 14, color: "#000", marginTop: 5 }}>
                 {distance1[selectedRouteIndex].toFixed(2)} km
               </Text>
@@ -289,11 +285,7 @@ const RouteDisplay = ({
                                 alignItems: "center",
                               }}
                             >
-                              <MaterialCommunityIcons
-                                name="speedometer"
-                                size={22}
-                                color="black"
-                              />
+                              <FontAwesome6 name="road" size={20} color="black" />
                               <Text
                                 style={{
                                   fontSize: 14,

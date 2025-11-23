@@ -17,6 +17,7 @@ import { useLocalSearchParams,router  } from 'expo-router';
 import { icons } from '../constants';
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 const { width, height } = Dimensions.get('window');
 const HEADER_MAX_HEIGHT = height * 0.5;
@@ -209,14 +210,13 @@ const TravelPlaceScreen = () => {
           </View>
           
           <TouchableOpacity
-          style={{position: 'absolute', right: 30, top: 90}}
+          style={{position: 'absolute', right: 30, top: 65, alignItems:'center', padding:10,borderWidth:1,borderRadius:10}}
           onPress={goback}
           >
-          <Image
-          source={icons.way}
-          resizeMode='contain'
-          style={{width: 50, height: 50}}
-          />
+          <MaterialIcons name="directions" size={34} color="black" />
+          <Text style={{fontFamily:'Outfit-Medium'}}>
+            Directions
+          </Text>
           </TouchableOpacity>
          
 

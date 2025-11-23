@@ -25,6 +25,8 @@ const SearchModal = ({
   setsearchPlace,
   onClose,
   bbox,
+  savePlace,
+  setRecentPlaces
 }) => {
   const [animation] = useState(new Animated.Value(0))
   const [results, setResults] = useState([])
@@ -139,7 +141,10 @@ const SearchModal = ({
       // Show marker on the map
       setShowSearchMarker(true)
 
-      
+      // Save the place to recents
+      if (savePlace && setRecentPlaces) {
+        savePlace(item, 'recent', setRecentPlaces, null)
+      }
 
       // Close the modal
       handleClose()
