@@ -638,7 +638,7 @@ export default function Main() {
       >
         {state.UrlTile && (
           <UrlTile
-            urlTemplate="https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}@2x.png?key=BV79ypCzUzpvOYri324W"
+            urlTemplate="https://api.maptiler.com/maps/bright-v2/{z}/{x}/{y}@2x.png?key="
             maximumZ={19}
           />
         )}

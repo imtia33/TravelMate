@@ -22,7 +22,7 @@ TravX is a **modern mobile application** designed to simplify your travel experi
 
 ### Prerequisites
 - **Node.js** (v16 or higher)
-- **Expo CLI** (`npm install -g expo-cli`)
+- **Expo Go** (`Download the expo go from playstore or app store`)
 - **Yarn** or **npm**
 
 ### Steps to Get Started
@@ -39,11 +39,13 @@ TravX is a **modern mobile application** designed to simplify your travel experi
    yarn install
    ```
 
-3. **Set Up Environment Variables**:
+3. **Set Up Environment Variables**:(optional)
    - Create a `.env` file in the root directory.
-   - Add your API keys:
+   - Add your API keys: add your google api key for maps (only for preview,dev build or production build. Not needed in expo) 
      ```bash
-     GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+        "googleMaps": {
+          "apiKey": "Your_api_key"
+        }
      
      ```
 
@@ -53,6 +55,7 @@ TravX is a **modern mobile application** designed to simplify your travel experi
    # or
    npm start -c
    ```
+   - This will open a QR code scanner in your terminal.
    - Use the **Expo Go** app on your phone to test the app, or run it on an **Android/iOS emulator**.
 
 ---
@@ -102,40 +105,18 @@ To use **Google Maps** and **Photon** services, you need to obtain API keys:
 
 
 
-Example `.env` file:
-```bash
-GOOGLE_MAPS_API_KEY=your_google_maps_api_key
-```
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions from the community! Here’s how you can help:
+This is a conceptual project idea. This won't be developed any further as expanding the whole app towards a country scale is not feasible for us. Although we would love to develop this further but the manpower needed to do this is huge. Feel free to use the code as a learning resource.
 
-1. **Fork the Repository**:
+1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/imti33/TravX.git
+   git clone https://github.com/imti33/TravelMate.git
    cd TravX
    ```
-
-2. **Create a New Branch**:
-   ```bash
-   git checkout -b feature-name
-   ```
-
-3. **Make Your Changes**:
-   - Ensure your code follows the existing style and is well-documented.
-   - Write tests for new features whenever possible.
-
-4. **Commit and Push**:
-   ```bash
-   git commit -am 'Add new feature'
-   git push origin feature-name
-   ```
-
-5. **Open a Pull Request**:
-   - Submit your changes for review.
 
 ---
 
@@ -151,6 +132,10 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 - **OpenStreetMap**: For providing open-source map data.
 - **Photon**: For geocoding and search functionality.
 - **Expo**: For providing an easy-to-use development environment.
+- **Contributors**: Thanks to Ashraful Islam Tareef, Musa Khan, Shalman Ahmed for helping with this project.
 
 ---
-
+<div align="center">
+  <p>Created by Core3 Devs</p>
+  <p><a href="https://core3.appwrite.network/">core3.appwrite.network</a></p>
+</div>

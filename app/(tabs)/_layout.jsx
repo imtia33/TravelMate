@@ -9,6 +9,7 @@ import { StatusBar } from "expo-status-bar"
 import { useTheme } from "../../context/ThemeProvider"
 import { COLORS } from "../../constants/theme"
 import { icons } from "../../constants"
+import { SafeAreaView } from "react-native-safe-area-context"
 
 const { width } = Dimensions.get("window")
 const PADDING = 20
@@ -230,13 +231,13 @@ export default function TabLayout() {
   }, [])
 
   return (
-    <View style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1 }}>
       <Tabs
         tabBar={(props) => <CustomTabBar {...props} isKeyboardVisible={isKeyboardVisible} />}
         screenOptions={({ route }) => ({
           headerShown: false,
           lazy: false,
-          tabBarIcon: ({ focused }) => { // Removed color parameter since we're using custom images
+          tabBarIcon: ({ focused }) => { 
             let icon
 
             if (route.name === "home") {
@@ -272,6 +273,6 @@ export default function TabLayout() {
         backgroundColor={isDarkMode ? COLORS.dark.background : COLORS.light.background}
         animated
       />
-    </View>
+    </SafeAreaView>
   )
 }

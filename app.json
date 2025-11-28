@@ -29,7 +29,7 @@
       "package": "com.travx.axi",
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyDRgXtqI3r5pKMcQx--3GzVMtgFvxIK_po"
+          "apiKey": "YOUR_MAPS_API_KEY"
         }
       },
       "intentFilters": [
